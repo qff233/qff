@@ -1,6 +1,7 @@
 #include "log.h"
 
 #include <algorithm>
+#include <iostream>
 
 namespace qff {
 
@@ -67,148 +68,220 @@ void StandLogAppender::output(const std::string& str) {
 	printf("%s", str.c_str());
 }
 
+#define XX(ItemName, Func)										\
+	class ItemName##Item : public LogFormat::Item {				\
+	public:														\
+		void append(std::string& str, LogEvent::ptr p_event,	\
+			const std::string& time_format) override {			\
+			str += p_event->get_##Func();						\
+		}														\
+	}
+
+XX(ThreadName, thread_name);
+XX(File, file_name);
+XX(Line, line);
+XX(Content, content);
+
+#undef XX
+
+//%n 换行
+//%t 四个空格
+//%m 内容
+//%p 级别
+//%% 百分号
+//%d 日期和时间
+//%F 源文件名称
+//%L 代码所在行数
+
+class ThreadIdItem : public LogFormat::Item {
+public:
+	void append(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) override {
+		str += std::to_string(p_event->get_thread_id());
+	}
+};
+
+class FiberIdItem : public LogFormat::Item {
+public:
+	void append(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) override {
+		str += std::to_string(p_event->get_fiber_id());
+	}
+};
+
+class StrItem : public LogFormat::Item {
+public:
+	StrItem(const std::string& str) 
+		:m_str(str) {
+	}
+	void append(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) override {
+		str += m_str;
+	}
+private:
+	std::string m_str;
+};
+
+class CharItem : public LogFormat::Item {
+public:
+	CharItem(char c)
+		:m_c(c) {
+	}
+	void append(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) override {
+		str += m_c;
+	}
+private:
+	char m_c;
+};
+
+class LevelItem : public LogFormat::Item {
+public:
+	void append(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) override {
+		str += LogLevel::ToString(p_event->get_level());
+	}
+};
+
+class TimeItem : public LogFormat::Item {
+public:
+	void append(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) override {
+		time_t t = p_event->get_time();
+		tm* local;
+		char buf[64] = {0};
+
+		local = localtime(&t);
+		strftime(buf, 64, time_format.c_str(), local);
+
+		str += buf;
+	}
+};
+
+LogFormat::LogFormat(const std::string& format) {
+	this->reset(format);
+}
+
+void LogFormat::reset(const std::string& format) {
+	m_item.clear();
+
+	for(auto it = format.cbegin()
+			; it != format.cend(); ++it) {
+
+		if(it+1 == format.cend()) {
+			Item::ptr item = std::make_shared<CharItem>(*it);
+			m_item.push_back(item);
+			break;
+		}
+		
+#define XX(Name, Args)										\
+		{ Item::ptr item = std::make_shared<Name##Item>(Args);	\
+		m_item.push_back(item);								\
+		it = next_it;										\
+		continue;}
+
+		if(*it == '%') {
+			auto next_it = it + 1;
+			switch(*next_it) {
+			case 'n':
+				XX(Char, '\n')
+			case 't':
+				XX(Char, '\t')
+			case 'm':
+				XX(Content, )
+			case 'p':
+				XX(Level, )
+			case 'T':
+				XX(ThreadName, )
+			case 'i':
+				XX(ThreadId, )
+			case 'f':
+				XX(FiberId, )
+			case '%':
+				XX(Char, '%')
+			case 'd':
+				XX(Time, )
+			case 'F':
+				XX(File, )
+			case 'L':
+				XX(Line, )
+			default:
+				std::string str(1, *it);
+				str += *next_it;
+				XX(Str, std::move(str));
+			}
+		}
+#undef XX
+		std::string str;
+		for(auto i = it; i != format.end() && *i != '%'; ++i) {
+			str += *i;
+		}
+		Item::ptr item = std::make_shared<StrItem>(std::move(str));
+		m_item.push_back(item);
+		it += str.size() - 1;
+	}
+}
+
+std::string LogFormat::format(LogEvent::ptr p_event) {
+	std::string str;
+	for(auto i : m_item) {
+		i->append(str, p_event, "%Y-%m-%d %H:%M:%S");
+	}
+	return str;
+}
 
 //%n 换行
 //%t 四个空格
 //%m 内容
 //%p 级别
 //%T 线程名
+//%i 线程ID
+//%f 协程ID
 //%% 百分号
 //%d 日期和时间
 //%F 源文件名称
 //%L 代码所在行数
-Logger::Logger(const std::string& name, LogLevel::Level level, const std::string& format) 
+Logger::Logger(const std::string& name, LogLevel::Level level
+				, const std::string& format) 
 	:m_name(name)
 	,m_level(level) {
-	this->set_format(format);
+	m_format = std::make_shared<LogFormat>(format);
+	auto p_appender = std::make_shared<StandLogAppender>("stand", m_level);
+	this->add_appender(p_appender);
 }
 
 void Logger::set_format(const std::string& format) {
-	enum {
-		eTheradName = 0, 
-		eThreadId   = 1, 
-		eFiberId	= 2, 
-		eLevel      = 3, 
-		eFileName   = 4, 
-		eLine       = 5, 
-		eTime       = 6, 
-		e2Block     = 7, 
-		eNext       = 8,
-		ePercent    = 9,
-		eContent    = 10
-	};
+	m_format->reset(format);
+}
 
-	for(auto ptr = format.begin(); ptr != format.end(); ++ptr) {
-		auto next_ptr = ptr + 1;
-		if(next_ptr == format.end()) break;
+void Logger::add_appender(LogAppender::ptr ptr) {
+	for(auto it = m_appenders.cbegin()
+			; it != m_appenders.cend(); ++it) {
+		if(*it == ptr) return;
+	}
+	m_appenders.push_back(ptr);
+}
 
-		if(*ptr == '%') {
-			switch(*next_ptr) {
-			case 'n':
-				m_format.push_back(eNext);
-			case 't':
-				m_format.push_back(e2Block);
-				m_format.push_back(e2Block);
-			case 'm':
-				m_format.push_back(eContent);
-			case 'p':
-				m_format.push_back(eLevel);
-			case 'T':
-				m_format.push_back(eTheradName);
-			case '%':
-				m_format.push_back(ePercent);
-			case 'd':
-				m_format.push_back(eTime);
-			case 'F':
-				m_format.push_back(eFileName);
-			case 'L':
-				m_format.push_back(eLine);
-			default:
-				continue;
-			}
+void Logger::del_appender(LogAppender::ptr ptr) {
+	for(auto it = m_appenders.begin()
+			; it != m_appenders.end(); ++it) {
+		if(*it == ptr) {
+			m_appenders.erase(it);
+			return;
 		}
-
-		int i = 1;
-		for(auto j = next_ptr; j != format.end() && *j != '%'; ++j)
-			++i;
-		for(int j = 0; j < i/2 + i%2; ++j) {
-			m_format.push_back(e2Block);
-		}
-		ptr = ptr -1 + i;
 	}
 }
 
-void Logger::log(LogEvent::ptr event) {
-	//eTheradName = 0, 
-	//eThreadId   = 1, 
-	//eFiberId	  = 2, 
-	//eLevel      = 3, 
-	//eFileName   = 4, 
-	//eLine       = 5, 
-	//eTime       = 6, 
-	//e2Block     = 7, 
-	//eNext       = 8,
-	//ePercent    = 9,
-	//eContent    = 10
-	std::string content;
-	for(auto i : m_format) {
-		switch(i) {
-		case 0:
-			content += event->get_thread_name();
-			continue;
-		case 1:
-			content += event->get_thread_id();
-			continue;
-		case 2:
-			content += event->get_fiber_id();
-			continue;
-		case 3:
-			content += LogLevel::ToString(event->get_level());
-			continue;
-		case 4:
-			content += event->get_file_name();
-			continue;
-		case 5:
-			content += event->get_line();
-			continue;
-		case 6: {
-			time_t t = event->get_time();
-			tm* local;
-			char buf[64] = {0};
-		
-			local = localtime(&t);
-			strftime(buf, 64, "%Y-%m-%d %H:%M:%S", local);
-			content += buf;
-		}
-			continue;
-		case 7:
-			content += "  ";
-			continue;
-		case 8:
-			content += '\n';
-			continue;
-		case 9:
-			content += '%';
-			continue;
-		case 10:
-			content += event->get_content();
-			continue;
-		default:
-			content += "  ";
-		};
-	}
+void Logger::log(LogEvent::ptr p_event) {
+	if(p_event->get_level() < m_level)
+		return;
 	for(auto ptr : m_appenders) {
-		if(event->get_level() < m_level)
+		if(p_event->get_level() < ptr->get_level())
 			return;
-		if(event->get_level() < ptr->get_level())
-			return;
+		std::string content = m_format->format(p_event);
 		ptr->output(content);
 	}
 }
-
-
-
-
 
 
 

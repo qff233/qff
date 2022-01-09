@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 
+#include "macro.h"
+
 namespace qff {
 
 class LogLevel {
@@ -48,6 +50,7 @@ private:
 
 class LogAppender {
 public:
+	NONECOPYABLE(LogAppender);
 	using ptr = std::shared_ptr<LogAppender>;
 
 	LogAppender(const std::string& name, LogLevel::Level level);
@@ -76,16 +79,57 @@ public:
 	void output(const std::string& str) override;
 };
 
+class LogFormat {
+public:
+	NONECOPYABLE(LogFormat);
+	using ptr = std::shared_ptr<LogFormat>;
+
+	LogFormat(const std::string& format = "");
+
+	void reset(const std::string& format);
+
+    std::string format(LogEvent::ptr p_event);
+private:
+	friend class StrItem;
+	friend class LevelItem;
+	friend class TimeItem;
+	friend class ThreadNameItem;
+	friend class ThreadIdItem;
+	friend class FiberIdItem;
+	friend class FileItem;
+	friend class LineItem;
+	friend class ContentItem;
+	friend class CharItem;
+	class Item {
+	public: 
+		using ptr = std::shared_ptr<Item>;
+		virtual ~Item() { }
+
+		virtual void append(std::string& str, LogEvent::ptr p_event
+							, const std::string& time_format = nullptr) = 0;
+	private:
+		std::string m_content;
+	};
+private:
+	std::vector<Item::ptr> m_item;
+};
+
 class Logger {
 public:
-	Logger(const std::string& name, LogLevel::Level level, const std::string& format);
+	NONECOPYABLE(Logger);
+	using ptr = std::shared_ptr<Logger>;
 
+	Logger(const std::string& name, LogLevel::Level level, const std::string& format);
+	
 	void set_format(const std::string& format);
+	void add_appender(LogAppender::ptr ptr);
+	void del_appender(LogAppender::ptr ptr);
+
 	void log(LogEvent::ptr event);
 private:
 	std::string m_name;
 	LogLevel::Level m_level;
-	std::vector<uint8_t> m_format;
+	LogFormat::ptr m_format;
 	std::vector<LogAppender::ptr> m_appenders;
 };
 
