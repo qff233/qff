@@ -280,6 +280,53 @@ void Logger::log(LogEvent::ptr p_event) {
 	}
 }
 
+LoggerManager::LoggerManager() {
+	m_root = std::make_shared<Logger>("ROOT", qff::LogLevel::DEBUG
+								, "[%d] [%T] [%i] [%f] %F:%L   %m");
+	m_system = std::make_shared<Logger>("SYSTEM", qff::LogLevel::DEBUG
+								, "[%d] [%T] [%i] [%f] %F:%L   %m");	
+	m_loggers.push_back(m_root);
+	m_loggers.push_back(m_system);
+}
 
+
+void LoggerManager::log(const std::string& name, LogEvent::ptr p_event) {
+	Logger::ptr logger = this->get_logger(name);
+	logger->log(p_event);
+}
+
+void LoggerManager::log_system(LogEvent::ptr p_event) {
+	m_system->log(p_event);
+}
+
+void LoggerManager::log_root(LogEvent::ptr p_event) {
+	m_root->log(p_event);
+}
+
+void LoggerManager::add_logger(Logger::ptr logger) {
+	std::string logger_name = logger->get_name();
+	for(const Logger::ptr i: m_loggers) {
+		if(i->get_name() == logger_name) return;
+	}
+	m_loggers.push_back(logger);
+}
+
+void LoggerManager::del_logger(Logger::ptr logger) {
+	std::string logger_name = logger->get_name();
+	for(auto it = m_loggers.begin(); it != m_loggers.end(); ++it) {
+		if((*it)->get_name() == logger_name) m_loggers.erase(it);
+	}
+}
+
+Logger::ptr LoggerManager::get_logger(const std::string& name) {
+	for(Logger::ptr i : m_loggers) {
+		if(i->get_name() == name) return i;
+	}
+	return nullptr;
+}
+
+Logger::ptr LoggerManager::get_root() {
+	return this->get_logger("ROOT");
+}
 
 }
