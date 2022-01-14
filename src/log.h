@@ -4,12 +4,13 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <functional>
 
 #include "macro.h"
 
 namespace qff {
 
-class LogLevel {
+class LogLevel final {
 public:
 	enum Level {
 		DEBUG = 0,
@@ -22,7 +23,7 @@ public:
 	static LogLevel::Level FromString(const std::string& str);
 };
 
-class LogEvent {
+class LogEvent final {
 public:
 	using ptr = std::shared_ptr<LogEvent>;
 	LogEvent(const std::string& thread_name, int thread_id, int fiber_id
@@ -64,7 +65,7 @@ private:
 	LogLevel::Level m_level;
 };
 
-class FileLogAppender : public LogAppender {
+class FileLogAppender final : public LogAppender {
 public:
 	FileLogAppender(const std::string& name, LogLevel::Level level);
 
@@ -72,17 +73,19 @@ public:
 private:
 };
 
-class StandLogAppender : public LogAppender {
+class StandLogAppender final : public LogAppender {
 public:
 	StandLogAppender(const std::string& name, LogLevel::Level level);
 
 	void output(const std::string& str) override;
 };
 
-class LogFormat {
+class LogFormat final {
 public:
 	NONECOPYABLE(LogFormat);
 	using ptr = std::shared_ptr<LogFormat>;
+	using ItemFunc = std::function<void(std::string&
+									,LogEvent::ptr, const std::string&)>;
 
 	LogFormat(const std::string& format = "");
 
@@ -90,31 +93,10 @@ public:
 
     std::string format(LogEvent::ptr p_event);
 private:
-	friend class StrItem;
-	friend class LevelItem;
-	friend class TimeItem;
-	friend class ThreadNameItem;
-	friend class ThreadIdItem;
-	friend class FiberIdItem;
-	friend class FileItem;
-	friend class LineItem;
-	friend class ContentItem;
-	friend class CharItem;
-	class Item {
-	public: 
-		using ptr = std::shared_ptr<Item>;
-		virtual ~Item() { }
-
-		virtual void append(std::string& str, LogEvent::ptr p_event
-							, const std::string& time_format = nullptr) = 0;
-	private:
-		std::string m_content;
-	};
-private:
-	std::vector<Item::ptr> m_item;
+	std::vector<ItemFunc> m_item;
 };
 
-class Logger {
+class Logger final {
 public:
 	NONECOPYABLE(Logger);
 	using ptr = std::shared_ptr<Logger>;

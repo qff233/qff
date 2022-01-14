@@ -65,22 +65,18 @@ StandLogAppender::StandLogAppender(const std::string& name
 }
 
 void StandLogAppender::output(const std::string& str) {
-	printf("%s", str.c_str());
+	printf("%s\n", str.c_str());
 }
 
-#define XX(ItemName, Func)										\
-	class ItemName##Item : public LogFormat::Item {				\
-	public:														\
-		void append(std::string& str, LogEvent::ptr p_event,	\
-			const std::string& time_format) override {			\
-			str += p_event->get_##Func();						\
-		}														\
-	}
+#define XX(Name, class_fun) \
+static void Name(std::string& str, LogEvent::ptr p_event, \
+			const std::string& time_format) { \
+	str += p_event->get_##class_fun(); \
+}
 
-XX(ThreadName, thread_name);
-XX(File, file_name);
-XX(Line, line);
-XX(Content, content);
+XX(F_ThreadName, thread_name);
+XX(F_File, file_name);
+XX(F_Content, content);
 
 #undef XX
 
@@ -92,71 +88,37 @@ XX(Content, content);
 //%d 日期和时间
 //%F 源文件名称
 //%L 代码所在行数
+static void F_Line(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) {
+	str += std::to_string(p_event->get_line());
+}
 
-class ThreadIdItem : public LogFormat::Item {
-public:
-	void append(std::string& str, LogEvent::ptr p_event
-			, const std::string& time_format) override {
-		str += std::to_string(p_event->get_thread_id());
-	}
-};
+static void F_ThreadId(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) {
+	str += std::to_string(p_event->get_thread_id());
+}
 
-class FiberIdItem : public LogFormat::Item {
-public:
-	void append(std::string& str, LogEvent::ptr p_event
-			, const std::string& time_format) override {
-		str += std::to_string(p_event->get_fiber_id());
-	}
-};
+static void F_FiberId(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) {
+	str += std::to_string(p_event->get_fiber_id());
+}
 
-class StrItem : public LogFormat::Item {
-public:
-	StrItem(const std::string& str) 
-		:m_str(str) {
-	}
-	void append(std::string& str, LogEvent::ptr p_event
-			, const std::string& time_format) override {
-		str += m_str;
-	}
-private:
-	std::string m_str;
-};
+static void F_Level (std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) {
+	str += LogLevel::ToString(p_event->get_level());
+}
 
-class CharItem : public LogFormat::Item {
-public:
-	CharItem(char c)
-		:m_c(c) {
-	}
-	void append(std::string& str, LogEvent::ptr p_event
-			, const std::string& time_format) override {
-		str += m_c;
-	}
-private:
-	char m_c;
-};
+static void F_Time(std::string& str, LogEvent::ptr p_event
+			, const std::string& time_format) {
+	time_t t = p_event->get_time();
+	tm* local;
+	char buf[64] = {0};
 
-class LevelItem : public LogFormat::Item {
-public:
-	void append(std::string& str, LogEvent::ptr p_event
-			, const std::string& time_format) override {
-		str += LogLevel::ToString(p_event->get_level());
-	}
-};
+	local = localtime(&t);
+	strftime(buf, 64, time_format.c_str(), local);
 
-class TimeItem : public LogFormat::Item {
-public:
-	void append(std::string& str, LogEvent::ptr p_event
-			, const std::string& time_format) override {
-		time_t t = p_event->get_time();
-		tm* local;
-		char buf[64] = {0};
-
-		local = localtime(&t);
-		strftime(buf, 64, time_format.c_str(), local);
-
-		str += buf;
-	}
-};
+	str += buf;
+}
 
 LogFormat::LogFormat(const std::string& format) {
 	this->reset(format);
@@ -169,63 +131,98 @@ void LogFormat::reset(const std::string& format) {
 			; it != format.cend(); ++it) {
 
 		if(it+1 == format.cend()) {
-			Item::ptr item = std::make_shared<CharItem>(*it);
-			m_item.push_back(item);
+			auto func = [=](std::string& str, LogEvent::ptr p_event
+							, const std::string& time_format){
+					str += *it;
+				};
+			m_item.push_back(func);
 			break;
 		}
-		
-#define XX(Name, Args)										\
-		{ Item::ptr item = std::make_shared<Name##Item>(Args);	\
-		m_item.push_back(item);								\
-		it = next_it;										\
-		continue;}
 
 		if(*it == '%') {
 			auto next_it = it + 1;
 			switch(*next_it) {
 			case 'n':
-				XX(Char, '\n')
-			case 't':
-				XX(Char, '\t')
+				m_item.push_back([](std::string& str, LogEvent::ptr p_event
+							, const std::string& time_format){
+					str += '\n';
+				});
+				++it;
+				continue;
+			case 't': 
+				m_item.push_back([](std::string& str, LogEvent::ptr p_event
+							, const std::string& time_format){
+					str += '\t';
+				});
+				++it;
+				continue;
 			case 'm':
-				XX(Content, )
+				m_item.push_back(F_Content);
+				++it;
+				continue;
 			case 'p':
-				XX(Level, )
+				m_item.push_back(F_Level);
+				++it;
+				continue;
 			case 'T':
-				XX(ThreadName, )
+				m_item.push_back(F_ThreadName);
+				++it;
+				continue;
 			case 'i':
-				XX(ThreadId, )
+				m_item.push_back(F_ThreadId);
+				++it;
+				continue;
 			case 'f':
-				XX(FiberId, )
+				m_item.push_back(F_FiberId);
+				++it;
+				continue;
 			case '%':
-				XX(Char, '%')
+				m_item.push_back([](std::string& str, LogEvent::ptr p_event
+							, const std::string& time_format){
+					str += '%';
+				});
+				++it;
+				continue;
 			case 'd':
-				XX(Time, )
+				m_item.push_back(F_Time);
+				++it;
+				continue;
 			case 'F':
-				XX(File, )
+				m_item.push_back(F_File);
+				++it;
+				continue;
 			case 'L':
-				XX(Line, )
+				m_item.push_back(F_Line);
+				++it;
+				continue;
 			default:
-				std::string str(1, *it);
-				str += *next_it;
-				XX(Str, std::move(str));
+				std::string cow_str(1, *it);
+				cow_str += *next_it;
+				m_item.push_back([=](std::string& str, LogEvent::ptr p_event
+							, const std::string& time_format){
+					str += cow_str;
+				});
+				++it;
+				continue;
 			}
 		}
-#undef XX
-		std::string str;
+		std::string cow_str;
 		for(auto i = it; i != format.end() && *i != '%'; ++i) {
-			str += *i;
+			cow_str += *i;
 		}
-		Item::ptr item = std::make_shared<StrItem>(std::move(str));
-		m_item.push_back(item);
-		it += str.size() - 1;
+		auto item_func = [=](std::string& str, LogEvent::ptr p_event
+							,const std::string& time_format) {
+				str += cow_str;
+			};
+		m_item.push_back(item_func);
+		it += cow_str.size() - 1;
 	}
 }
 
 std::string LogFormat::format(LogEvent::ptr p_event) {
 	std::string str;
-	for(auto i : m_item) {
-		i->append(str, p_event, "%Y-%m-%d %H:%M:%S");
+	for(auto fun : m_item) {
+		fun(str, p_event, "%Y-%m-%d %H:%M:%S");
 	}
 	return str;
 }

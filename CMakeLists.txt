@@ -5,7 +5,7 @@ set(CMAKE_VERBOSE_MAKEFILE  ON)
 
 include_directories(./src)
 
-add_compile_options(-g -O0)
+add_compile_options(-g)
 
 aux_source_directory(./src src_list)
 add_library(qff233 SHARED ${src_list})

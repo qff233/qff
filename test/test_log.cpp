@@ -1,6 +1,8 @@
 #include <time.h>
 #include "log.h"
 
+#include <iostream>
+
 int main() {
 	qff::Logger logger("ROOT", qff::LogLevel::DEBUG, "[%d] [%T] [%i] [%f] %F:%L   %m");
 	qff::LogEvent::ptr log_event 
