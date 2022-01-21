@@ -35,16 +35,16 @@ LogLevel::Level LogLevel::FromString(const std::string& str) {
 LogEvent::LogEvent(const std::string& thread_name, int thread_id
 				, int fiber_id, LogLevel::Level level
 				, const std::string& file_name, int line
-				, time_t time, const std::string& content)
+				, time_t time)
 	:m_thread_name(thread_name)
 	,m_thread_id(thread_id)
 	,m_fiber_id(fiber_id)
 	,m_level(level)
 	,m_file_name(file_name)
 	,m_line(line)
-	,m_time(time) 
-	,m_content(content){
+	,m_time(time) {
 }
+
 
 LogAppender::LogAppender(const std::string& name, LogLevel::Level level) 
 	:m_name(name)
@@ -56,7 +56,12 @@ FileLogAppender::FileLogAppender(const std::string& name
 	:LogAppender(name, level) {
 }
 
+FileLogAppender::~FileLogAppender() {
+
+}
+
 void FileLogAppender::output(const std::string& str) {
+	
 }
 
 StandLogAppender::StandLogAppender(const std::string& name
@@ -76,9 +81,13 @@ static void Name(std::string& str, LogEvent::ptr p_event, \
 
 XX(F_ThreadName, thread_name);
 XX(F_File, file_name);
-XX(F_Content, content);
 
 #undef XX
+
+static void F_Content(std::string& str, LogEvent::ptr p_event, 
+			const std::string& time_format) {
+	str += p_event->get_SS().str();
+}
 
 //%n 换行
 //%t 四个空格
@@ -217,7 +226,7 @@ void LogFormat::reset(const std::string& format) {
 		m_item.push_back(item_func);
 		it += cow_str.size() - 1;
 	}
-}
+} //LogFormat::reset(const std::string& format)
 
 std::string LogFormat::format(LogEvent::ptr p_event) {
 	std::string str;
@@ -282,17 +291,17 @@ void Logger::log(LogEvent::ptr p_event) {
 
 LoggerManager::LoggerManager() {
 	m_root = std::make_shared<Logger>("ROOT", qff::LogLevel::DEBUG
-								, "[%d] [%T] [%i] [%f] %F:%L   %m");
+								, "[%d] [%T] [%i] [%f] %F:%L   %n%m");
 	m_system = std::make_shared<Logger>("SYSTEM", qff::LogLevel::DEBUG
-								, "[%d] [%T] [%i] [%f] %F:%L   %m");	
+								, "[%d] [%T] [%i] [%f] %F:%L   %n%m");	
 	m_loggers.push_back(m_root);
 	m_loggers.push_back(m_system);
 }
 
 
 void LoggerManager::log(const std::string& name, LogEvent::ptr p_event) {
-	Logger::ptr logger = this->get_logger(name);
-	logger->log(p_event);
+	Logger::ptr p_logger = this->get_logger(name);
+	p_logger->log(p_event);
 }
 
 void LoggerManager::log_system(LogEvent::ptr p_event) {
@@ -303,16 +312,16 @@ void LoggerManager::log_root(LogEvent::ptr p_event) {
 	m_root->log(p_event);
 }
 
-void LoggerManager::add_logger(Logger::ptr logger) {
-	std::string logger_name = logger->get_name();
+void LoggerManager::add_logger(Logger::ptr p_logger) {
+	std::string logger_name = p_logger->get_name();
 	for(const Logger::ptr i: m_loggers) {
 		if(i->get_name() == logger_name) return;
 	}
-	m_loggers.push_back(logger);
+	m_loggers.push_back(p_logger);
 }
 
-void LoggerManager::del_logger(Logger::ptr logger) {
-	std::string logger_name = logger->get_name();
+void LoggerManager::del_logger(Logger::ptr p_logger) {
+	std::string logger_name = p_logger->get_name();
 	for(auto it = m_loggers.begin(); it != m_loggers.end(); ++it) {
 		if((*it)->get_name() == logger_name) m_loggers.erase(it);
 	}
@@ -322,11 +331,28 @@ Logger::ptr LoggerManager::get_logger(const std::string& name) {
 	for(Logger::ptr i : m_loggers) {
 		if(i->get_name() == name) return i;
 	}
-	return nullptr;
+	return m_system;
 }
 
 Logger::ptr LoggerManager::get_root() {
 	return this->get_logger("ROOT");
+}
+
+Logger::ptr LoggerManager::get_system() {
+	return this->get_logger("SYSTEM");
+}
+
+LogEventManager::LogEventManager(LogEvent::ptr p_event, Logger::ptr p_logger) 
+	:m_event(p_event)
+	,m_logger(p_logger) {
+}
+
+LogEventManager::~LogEventManager() {
+	m_logger->log(m_event);
+}
+
+std::stringstream& LogEventManager::get_SS() {
+	return m_event->get_SS();
 }
 
 }

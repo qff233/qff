@@ -5,26 +5,42 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <sstream>
 
 #include "utils.h"
 #include "macro.h"
 #include "singleton.h"
 
 
-#define QFF_LOG_NAME(NAME, STR) \
-	Loggermgr::Get()->log(NAME,  \
-			std::make_shared<qff::LogEvent>("UNKNOW", ::qff::GetThreadId(), ::qff::GetFiberId(), qff::LogLevel::DEBUG \
-											, __FILE__, __LINE__, time(0), STR));
+#define QFF_LOG_NAME(NAME)															\
+	qff::Loggermgr::Get()->															\
+		get_logger(NAME)
 
-#define QFF_LOG_ROOT(STR) \
-	qff::LoggerMgr::Get()->	\
-		log_root(std::make_shared<qff::LogEvent>("UNKNOW", ::qff::GetThreadId(), ::qff::GetFiberId(), qff::LogLevel::DEBUG \
-											, __FILE__, __LINE__, time(0), STR));
+#define QFF_LOG_ROOT																\
+	qff::LoggerMgr::Get()->get_root()
 
-#define QFF_LOG_SYSTEM(STR) \
-	qff::LoggerMgr::Get()-> \
-	log_system(std::make_shared<qff::LogEvent>("UNKNOW", ::qff::GetThreadId(), ::qff::GetFiberId(), qff::LogLevel::DEBUG \
-											, __FILE__, __LINE__, time(0), STR));
+#define QFF_LOG_SYSTEM 																\
+	qff::LoggerMgr::Get()->get_system()
+
+#define QFF_LOG_EVENT(LEVEL)	\
+	std::make_shared<qff::LogEvent>(qff::GetThreadName(), 			\
+			 ::qff::GetThreadId(), ::qff::GetFiberId(), qff::LogLevel::LEVEL 		\
+					,__FILE__, __LINE__, time(0))
+
+#define QFF_LOG_DEBUG(LOGGER)														\
+	qff::LogEventManager(QFF_LOG_EVENT(DEBUG), LOGGER).get_SS()
+
+#define QFF_LOG_INFO(LOGGER)														\
+	qff::LogEventManager(QFF_LOG_EVENT(INFO), LOGGER).get_SS()
+
+#define QFF_LOG_WARN(LOGGER)														\
+	qff::LogEventManager(QFF_LOG_EVENT(WARN), LOGGER).get_SS()
+
+#define QFF_LOG_ERROR(LOGGER)														\
+	qff::LogEventManager(QFF_LOG_EVENT(ERROR), LOGGER).get_SS()
+
+#define QFF_LOG_FATAL(LOGGER)														\
+	qff::LogEventManager(QFF_LOG_EVENT(FATAL), LOGGER).get_SS()
 
 namespace qff {
 
@@ -46,7 +62,7 @@ public:
 	using ptr = std::shared_ptr<LogEvent>;
 	LogEvent(const std::string& thread_name, int thread_id, int fiber_id
 			, LogLevel::Level level, const std::string& file_name
-			, int line, time_t time, const std::string& content);
+			, int line, time_t time);
 
 	const std::string& get_thread_name() const { return m_thread_name; }
 	int get_thread_id() const { return m_thread_id; }
@@ -55,7 +71,8 @@ public:
 	const std::string& get_file_name() const { return m_file_name; }
 	int get_line() const { return m_line; }
 	time_t get_time() const { return m_time; }
-	const std::string& get_content() const { return m_content; }
+	std::stringstream& get_SS() { return m_content; }
+
 private:
 	std::string m_thread_name;
 	int m_thread_id = -1;
@@ -64,8 +81,9 @@ private:
 	std::string m_file_name;
 	int m_line = -1;
 	time_t m_time = -1;
-	std::string m_content;
+	std::stringstream m_content;
 };
+
 
 class LogAppender {
 public:
@@ -87,6 +105,7 @@ private:
 class FileLogAppender final : public LogAppender {
 public:
 	FileLogAppender(const std::string& name, LogLevel::Level level);
+	~FileLogAppender();
 
 	void output(const std::string& str) override;
 private:
@@ -136,6 +155,17 @@ private:
 	std::vector<LogAppender::ptr> m_appenders;
 };
 
+class LogEventManager {
+public:
+	LogEventManager(LogEvent::ptr p_event, Logger::ptr p_logger);
+	~LogEventManager();
+
+	std::stringstream& get_SS();
+private:
+	LogEvent::ptr m_event;
+	Logger::ptr m_logger;
+};
+
 class LoggerManager final {
 public:
 	LoggerManager();
@@ -144,16 +174,18 @@ public:
 	void log_system(LogEvent::ptr p_event);
 	void log_root(LogEvent::ptr p_event);
 
-	void add_logger(Logger::ptr logger);
-	void del_logger(Logger::ptr logger);
+	void add_logger(Logger::ptr p_logger);
+	void del_logger(Logger::ptr p_logger);
 
 	Logger::ptr get_logger(const std::string& name);
 	Logger::ptr get_root();
+	Logger::ptr get_system();
 private:
 	Logger::ptr m_system;
 	Logger::ptr m_root;
 	std::vector<Logger::ptr> m_loggers;
 };
+
 
 using LoggerMgr = Singleton<LoggerManager>;
 
