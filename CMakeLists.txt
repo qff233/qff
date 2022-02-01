@@ -7,7 +7,7 @@ include_directories(./src)
 
 add_compile_options(-std=c++17 -g)
 
-find_package(yaml-cpp REQUIRED )
+find_package(yaml-cpp REQUIRED)
 
 include_directories(${yaml-cpp_INCLUDE_DIRS})
 

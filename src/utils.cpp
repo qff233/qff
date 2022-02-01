@@ -43,7 +43,7 @@ time_t GetCurrentUS() {
     return tv.tv_sec * 1000 * 1000ul  + tv.tv_usec;
 }
 
-namespace StringUtil {
+namespace StringUtils {
 
 std::string StringToUpper(const std::string& str) {
     std::string rt = str;
@@ -55,6 +55,26 @@ std::string StringToLower(const std::string& str) {
     std::string rt = str;
     std::transform(rt.begin(), rt.end(), rt.begin(), ::tolower);
     return rt;
+}
+
+std::vector<std::string> Spilt(const std::string& str, char sign) {
+    std::vector<std::string> sub_strs;
+    size_t now_pos = 0;
+    size_t dot_pos = std::string::npos;
+    std::string sub_str;
+    for(;;) {
+        dot_pos = str.find(sign, now_pos);
+        if(dot_pos == std::string::npos) {
+            sub_str = 
+                str.substr(now_pos, str.size() - now_pos);
+            sub_strs.push_back(sub_str);
+            break;
+        }
+        sub_str = str.substr(now_pos, dot_pos - now_pos);
+        sub_strs.push_back(sub_str);
+        now_pos = dot_pos + 1;
+    }
+    return sub_strs;
 }
 
 static std::string __formatv(const char* fmt, va_list ap) {
@@ -311,6 +331,7 @@ YAML::Node GetYamlFromFile(const std::string& file_name) {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) 
             << "yaml: LoadFile is error. there is a rensen that   " << e.what();
         return YAML::Node();
+        throw;
     }
     return config;
 }

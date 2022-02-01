@@ -9,65 +9,48 @@
 
 namespace qff {
 
-class ConfigVar {
-public:
-    NONECOPYABLE(ConfigVar);
+struct ConfigVar {
     using ptr = std::shared_ptr<ConfigVar>;
 
     enum Type {
-        INT      = 0,
-        STRING   = 1,
-        List     = 2
+        NONE   = 0,
+        STRING = 1,
+        LIST   = 2
     };
+    std::string key;
+    std::string val;
+    Type type;
+    std::vector<ConfigVar::ptr> nexts;
 
-    template<typename T>
-    ConfigVar(const std::string& name, const T& val, const std::string& despription = "") 
-        :m_name(name)
-        ,m_val(m_val)
-        ,m_despription(despription) {
-    }
+    ConfigVar();
+    ConfigVar(const std::string& key);
+    ConfigVar(const std::string& key, const std::string& value);
+}; //struct ConfigVar
 
-    const std::string& get_name() const { return m_name; }
-    const std::string& get_desprition() const { return m_despription; }
-private:
-    std::string m_name;
-    std::string m_despription;
-    std::variant<int, std::string> m_val;
-    std::vector<ConfigVar::ptr> m_vars;
-};
-
-class ConfigManager {
+class Config {
 public:
-    NONECOPYABLE(ConfigManager);
+    friend std::ostream& operator<<(std::ostream& os, const Config& config);
+    using NodeType = ConfigVar;
+    using NodesType = std::vector<ConfigVar::ptr>;
+    NONECOPYABLE(Config);
+    
+    Config();
 
-    void load_config_from_path(const std::string& path);
-    void load_config_from_file(const std::string& file_name);
-
-    void add_config(ConfigVar::ptr config_var);
-    template<typename T>
-    void add_config(const std::string& name, const T& val
-            , const std::string& despription="") {
-        ConfigVar::ptr config_var = std::make_shared<ConfigVar>(name, val, despription);
-        add_config(config_var);
-    }
-
-    ConfigVar::ptr get_config(const std::string& name);
-    template<typename T>
-    ConfigVar::ptr get_config(const std::string& name, const T& default_val
-            , const std::string& despription="") {
-        auto p_config = this->get_config(name);
-        if(p_config != nullptr)
-            return p_config;
-        ConfigVar::ptr config_var = std::make_shared<ConfigVar>(name, default_val, despription);
-        add_config(config_var);
-        return config_var;
-    }
+    void load_from_path(const std::string& path);
+    void load_from_file(const std::string& file_name);
+    
+    int get_int_var(const std::string& key) noexcept;
+    std::string get_string_var(const std::string& key) noexcept;
+    std::vector<std::string> get_vec_string_var(const std::string& key);
+    std::vector<int> get_vec_int_var(const std::string& key);
 private:
-    std::vector<ConfigVar::ptr> m_datas;
-};
+    NodesType m_roots;
+}; //class Config
 
-using ConfigMgr = Singleton<ConfigManager>;
+std::ostream& operator<<(std::ostream& os, const Config& config);
 
-}
+using ConfigMgr = Singleton<Config>;
+
+} //namespace qff
 
 #endif

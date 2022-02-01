@@ -19,7 +19,9 @@ namespace StringUtils {
     std::string StringToUpper(const std::string& str);
     std::string StringToLower(const std::string& str);
 
-    std::string format(const char* fmt, ...);
+    std::vector<std::string> Spilt(const std::string& str, char sign);
+
+    std::string Format(const char* fmt, ...);
 }
 
 namespace FSUtils {
