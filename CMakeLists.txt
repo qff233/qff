@@ -13,14 +13,16 @@ include_directories(${yaml-cpp_INCLUDE_DIRS})
 
 aux_source_directory(./src src_list)
 add_library(qff233 SHARED ${src_list})
-target_link_libraries(qff233 yaml-cpp)
-
+target_link_libraries(qff233 yaml-cpp pthread)
 
 add_executable(test_log test/test_log)
 target_link_libraries(test_log qff233)
 
 add_executable(test_config test/test_config)
 target_link_libraries(test_config qff233)
+
+add_executable(test_thread test/test_thread)
+target_link_libraries(test_thread qff233)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

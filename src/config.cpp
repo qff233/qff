@@ -69,7 +69,7 @@ static void __get_var(const Config::NodesType& nodes, std::queue<std::string>& k
     if(keys.empty()) return;
     if(keys.size() == 1) {
         for(auto i : nodes) {
-            if(i->key == keys.front()) {
+            if(i->key == keys.front() && i->type == Config::NodeType::STRING) {
                 result = i->val;
                 return;
             }
@@ -104,7 +104,7 @@ static void __get_vec_var(const Config::NodesType& nodes, std::queue<std::string
     if(keys.empty()) return;
     if(keys.size() == 1) {
         for(auto i : nodes) {
-            if(i->key == keys.front()) {
+            if(i->key == keys.front() && i->type == Config::NodeType::LIST) {
                 for(const auto& it : i->nexts) {
                     result.push_back(it->val);
                 }

@@ -16,6 +16,7 @@
 #include <dirent.h>
 
 #include "log.h"
+#include "thread.h"
 
 namespace qff {
 
@@ -28,7 +29,7 @@ uint32_t GetFiberId() {
 }
 
 std::string GetThreadName() {
-    return "UNKNOW";
+    return Thread::GetName();
 }
 
 time_t GetCurrentMS() {
