@@ -63,6 +63,7 @@ FileLogAppender::~FileLogAppender() {
 }
 
 void FileLogAppender::output(const std::string& str) {
+	MutexType::Lock mutex(m_mutex);
 	m_ofs << str << std::endl;
 }
 
@@ -72,6 +73,7 @@ StandLogAppender::StandLogAppender(const std::string& name
 }
 
 void StandLogAppender::output(const std::string& str) {
+	MutexType::Lock mutex(m_mutex);
 	printf("%s\n", str.c_str());
 }
 
@@ -136,6 +138,7 @@ LogFormat::LogFormat(const std::string& format) {
 }
 
 void LogFormat::reset(const std::string& format) {
+	MutexType::Lock lock(m_mutex);
 	m_item.clear();
 
 	for(auto it = format.cbegin()
@@ -263,6 +266,7 @@ void Logger::set_format(const std::string& format) {
 }
 
 void Logger::add_appender(LogAppender::ptr ptr) {
+	MutexType::Lock lock(m_mutex);
 	for(auto it = m_appenders.cbegin()
 			; it != m_appenders.cend(); ++it) {
 		if(*it == ptr) return;
@@ -271,6 +275,7 @@ void Logger::add_appender(LogAppender::ptr ptr) {
 }
 
 void Logger::del_appender(LogAppender::ptr ptr) {
+	MutexType::Lock lock(m_mutex);
 	for(auto it = m_appenders.begin()
 			; it != m_appenders.end(); ++it) {
 		if(*it == ptr) {
@@ -315,6 +320,7 @@ void LoggerManager::log_root(LogEvent::ptr p_event) {
 }
 
 void LoggerManager::add_logger(Logger::ptr p_logger) {
+	MutexType::Lock lock(m_mutex);
 	std::string logger_name = p_logger->get_name();
 	for(const Logger::ptr i: m_loggers) {
 		if(i->get_name() == logger_name) return;
@@ -323,6 +329,7 @@ void LoggerManager::add_logger(Logger::ptr p_logger) {
 }
 
 void LoggerManager::del_logger(Logger::ptr p_logger) {
+	MutexType::Lock lock(m_mutex);
 	std::string logger_name = p_logger->get_name();
 	for(auto it = m_loggers.begin(); it != m_loggers.end(); ++it) {
 		if((*it)->get_name() == logger_name) m_loggers.erase(it);

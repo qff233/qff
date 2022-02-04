@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "macro.h"
 #include "singleton.h"
+#include "thread.h"
 
 
 #define QFF_LOG_NAME(NAME)															\
@@ -90,6 +91,7 @@ class LogAppender {
 public:
 	NONECOPYABLE(LogAppender);
 	using ptr = std::shared_ptr<LogAppender>;
+	using MutexType = SpinLock;
 
 	LogAppender(const std::string& name, LogLevel::Level level);
 	virtual ~LogAppender() { };
@@ -98,6 +100,8 @@ public:
 	
 	const std::string& get_name() const { return m_name; }
 	LogLevel::Level get_level() { return m_level; }
+protected:
+	MutexType m_mutex;
 private:
 	std::string m_name;
 	LogLevel::Level m_level;
@@ -125,6 +129,7 @@ class LogFormat final {
 public:
 	NONECOPYABLE(LogFormat);
 	using ptr = std::shared_ptr<LogFormat>;
+	using MutexType = Mutex;
 	using ItemFunc = std::function<void(std::string&
 									,LogEvent::ptr, const std::string&)>;
 
@@ -135,12 +140,14 @@ public:
     std::string format(LogEvent::ptr p_event);
 private:
 	std::vector<ItemFunc> m_item;
+	MutexType m_mutex;
 };
 
 class Logger final {
 public:
 	NONECOPYABLE(Logger);
 	using ptr = std::shared_ptr<Logger>;
+	using MutexType = Mutex;
 
 	Logger(const std::string& name, LogLevel::Level level, const std::string& format);
 	
@@ -156,11 +163,13 @@ private:
 	LogLevel::Level m_level;
 	LogFormat::ptr m_format;
 	std::vector<LogAppender::ptr> m_appenders;
+	MutexType m_mutex;
 };
 
 class LogEventManager final {
 public:
 	NONECOPYABLE(LogEventManager);
+
 	LogEventManager(LogEvent::ptr p_event, Logger::ptr p_logger);
 	~LogEventManager();
 
@@ -173,6 +182,9 @@ private:
 class LoggerManager final {
 public:
 	NONECOPYABLE(LoggerManager);
+
+	using MutexType = Mutex;
+
 	LoggerManager();
 
 	void log(const std::string& name, LogEvent::ptr p_event);
@@ -189,6 +201,7 @@ private:
 	Logger::ptr m_system;
 	Logger::ptr m_root;
 	std::vector<Logger::ptr> m_loggers;
+	MutexType m_mutex;
 };
 
 
