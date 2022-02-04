@@ -4,13 +4,14 @@
 #include <string>
 #include <vector>
 #include "yaml-cpp/yaml.h"
+#include "fiber.h"
 
 namespace qff {
 
 pid_t GetThreadId();
 std::string GetThreadName();
 
-uint32_t GetFiberId();
+fid_t GetFiberId();
 
 time_t GetCurrentMS();
 time_t GetCurrentUS();

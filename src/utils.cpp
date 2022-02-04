@@ -24,8 +24,8 @@ pid_t GetThreadId() {
     return syscall(SYS_gettid);
 }
 
-uint32_t GetFiberId() {
-    return 0;
+fid_t GetFiberId() {
+    return qff::Fiber::GetFiberId();
 }
 
 std::string GetThreadName() {

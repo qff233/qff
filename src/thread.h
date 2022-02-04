@@ -27,8 +27,10 @@ class ScopeLockImpl final {
 public:
     NONECOPYABLE(ScopeLockImpl);
 
-    ScopeLockImpl(T& mutex) noexcept
+    ScopeLockImpl(T& mutex, bool is_lock = true) noexcept
         :m_mutex(mutex) {
+        if(!is_lock) 
+            return;
         m_is_lock = true;
         m_mutex.lock();
     }
@@ -61,7 +63,7 @@ class ScopeReadLockImpl final {
 public:
     NONECOPYABLE(ScopeReadLockImpl);
 
-    ScopeReadLockImpl(T& mutex) noexcept
+    ScopeReadLockImpl(T& mutex, bool is_lock = true) noexcept
         :m_mutex(mutex) {
         m_is_lock = true;
         m_mutex.rdlock();
@@ -95,7 +97,7 @@ class ScopeWriteLockImpl final {
 public:
     NONECOPYABLE(ScopeWriteLockImpl);
 
-    ScopeWriteLockImpl(T& mutex) noexcept
+    ScopeWriteLockImpl(T& mutex, bool is_lock = true) noexcept
         :m_mutex(mutex) {
         m_is_lock = true;
         m_mutex.wrlock();
@@ -124,10 +126,27 @@ private:
     bool m_is_lock;
 };
 
+class Conditon final {
+public:
+    NONECOPYABLE(Conditon);
+
+    Conditon() noexcept;
+    ~Conditon() noexcept;
+
+    void lock() noexcept;
+    void unlock() noexcept;
+
+    void wait() noexcept;
+    void notify() noexcept;
+private:
+    pthread_mutex_t m_mutex;
+    pthread_cond_t m_conditon;
+};
+
 class RWMutex final {
 public:
-    using ReadLock  = ScopeReadLockImpl<RWMutex>;
-    using WriteLock = ScopeWriteLockImpl<RWMutex>;
+    typedef ScopeReadLockImpl<RWMutex> ReadLock;
+    typedef ScopeWriteLockImpl<RWMutex> WriteLock;
 
     RWMutex() noexcept;
     ~RWMutex() noexcept;
@@ -143,7 +162,7 @@ class Mutex final {
 public:
     NONECOPYABLE(Mutex);
 
-    using Lock = ScopeLockImpl<Mutex>;
+    typedef ScopeLockImpl<Mutex> Lock;
 
     Mutex() noexcept;
     ~Mutex() noexcept;
@@ -158,7 +177,7 @@ class SpinLock final {
 public:
     NONECOPYABLE(SpinLock);
 
-    using Lock = ScopeLockImpl<SpinLock>;
+    typedef ScopeLockImpl<SpinLock> Lock;
 
     SpinLock() noexcept;
     ~SpinLock() noexcept;
@@ -172,8 +191,8 @@ private:
 class Thread final {
 public:
     NONECOPYABLE(Thread);
-    using ptr = std::shared_ptr<Thread>;
-    using CallBackType = std::function<void()>;
+    typedef std::shared_ptr<Thread> ptr;
+    typedef std::function<void()> CallBackType;
 
     static Thread* GetThis();
     static const std::string& GetName();

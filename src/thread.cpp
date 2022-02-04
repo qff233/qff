@@ -30,6 +30,32 @@ void Semaphore::notify() {
         throw std::logic_error("sem_post error");
 }
 
+Conditon::Conditon() noexcept {
+    ::pthread_mutex_init(&m_mutex, nullptr);
+    ::pthread_cond_init(&m_conditon, nullptr);
+}
+
+Conditon::~Conditon() noexcept {
+    ::pthread_mutex_destroy(&m_mutex);
+    ::pthread_cond_destroy(&m_conditon);
+}
+
+void Conditon::lock() noexcept {
+    ::pthread_mutex_lock(&m_mutex);
+}
+
+void Conditon::unlock() noexcept {
+    ::pthread_mutex_unlock(&m_mutex);
+}
+
+void Conditon::wait() noexcept {
+    ::pthread_cond_wait(&m_conditon, &m_mutex);
+}
+
+void Conditon::notify() noexcept {
+    ::pthread_cond_signal(&m_conditon);
+}
+
 RWMutex::RWMutex() noexcept {
     ::pthread_rwlock_init(&m_lock, nullptr);
 }
@@ -91,9 +117,12 @@ const std::string& Thread::GetName() {
 }
 
 void Thread::SetName(const std::string& name) {
-    if (t_thread)
-        t_thread->m_name = name;
-    t_thread_name = name;
+    std::string n_name = name.substr(0, 15);
+    if (t_thread) {
+        t_thread->m_name = n_name;
+    }
+    t_thread_name = n_name;
+    ::pthread_setname_np(pthread_self(), n_name.c_str());
 }
 
 Thread::Thread(CallBackType callback, const std::string& name) 
@@ -103,7 +132,7 @@ Thread::Thread(CallBackType callback, const std::string& name)
     else
         m_name = name;
     
-    int rt = pthread_create(&m_thread, nullptr, &Thread::Run, this);
+    int rt = ::pthread_create(&m_thread, nullptr, &Thread::Run, this);
     if(rt) {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "pthread_create fail, rt=" << rt
             << "  name=" << name;
@@ -114,7 +143,7 @@ Thread::Thread(CallBackType callback, const std::string& name)
 
 void Thread::join() {
     if(!m_thread) return;
-    int rt = pthread_join(m_thread, nullptr);
+    int rt = ::pthread_join(m_thread, nullptr);
     if(rt) {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "pthread_join fail, rt=" << rt
             << "  name=" << m_name;
@@ -129,7 +158,7 @@ void* Thread::Run(void* arg) {
 
     thread->m_id = GetThreadId();
     std::string name = thread->m_name.substr(0, 15);
-    pthread_setname_np(thread->m_thread, name.c_str());
+    ::pthread_setname_np(thread->m_thread, name.c_str());
     SetName(name);
 
     CallBackType cb;

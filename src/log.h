@@ -61,7 +61,7 @@ public:
 
 class LogEvent final {
 public:
-	using ptr = std::shared_ptr<LogEvent>;
+	typedef std::shared_ptr<LogEvent> ptr;
 	LogEvent(const std::string& thread_name, int thread_id, int fiber_id
 			, LogLevel::Level level, const std::string& file_name
 			, int line, time_t time);
@@ -90,8 +90,8 @@ private:
 class LogAppender {
 public:
 	NONECOPYABLE(LogAppender);
-	using ptr = std::shared_ptr<LogAppender>;
-	using MutexType = SpinLock;
+	typedef std::shared_ptr<LogAppender> ptr;
+	typedef Mutex MutexType;
 
 	LogAppender(const std::string& name, LogLevel::Level level);
 	virtual ~LogAppender() { };
@@ -128,10 +128,10 @@ public:
 class LogFormat final {
 public:
 	NONECOPYABLE(LogFormat);
-	using ptr = std::shared_ptr<LogFormat>;
-	using MutexType = Mutex;
-	using ItemFunc = std::function<void(std::string&
-									,LogEvent::ptr, const std::string&)>;
+	typedef std::shared_ptr<LogFormat> ptr;
+	typedef Mutex MutexType;
+	typedef std::function<void(std::string&, LogEvent::ptr
+									, const std::string&)> ItemFunc;
 
 	LogFormat(const std::string& format = "");
 
@@ -146,8 +146,8 @@ private:
 class Logger final {
 public:
 	NONECOPYABLE(Logger);
-	using ptr = std::shared_ptr<Logger>;
-	using MutexType = Mutex;
+	typedef std::shared_ptr<Logger> ptr;
+	typedef Mutex MutexType;
 
 	Logger(const std::string& name, LogLevel::Level level, const std::string& format);
 	
@@ -183,7 +183,7 @@ class LoggerManager final {
 public:
 	NONECOPYABLE(LoggerManager);
 
-	using MutexType = Mutex;
+	typedef Mutex MutexType;
 
 	LoggerManager();
 
