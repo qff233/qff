@@ -33,6 +33,8 @@ private:
     pthread_t m_thread = 0;
 };
 
+
+
 } //namespace qff
 
 #endif

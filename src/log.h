@@ -6,6 +6,7 @@
 #include <vector>
 #include <functional>
 #include <sstream>
+#include <fstream>
 
 #include "utils.h"
 #include "macro.h"
@@ -104,11 +105,13 @@ private:
 
 class FileLogAppender final : public LogAppender {
 public:
-	FileLogAppender(const std::string& name, LogLevel::Level level);
+	FileLogAppender(const std::string& name, LogLevel::Level level
+					, const std::string& file_name);
 	~FileLogAppender();
 
 	void output(const std::string& str) override;
 private:
+	std::ofstream m_ofs;
 };
 
 class StandLogAppender final : public LogAppender {
@@ -155,8 +158,9 @@ private:
 	std::vector<LogAppender::ptr> m_appenders;
 };
 
-class LogEventManager {
+class LogEventManager final {
 public:
+	NONECOPYABLE(LogEventManager);
 	LogEventManager(LogEvent::ptr p_event, Logger::ptr p_logger);
 	~LogEventManager();
 
@@ -168,6 +172,7 @@ private:
 
 class LoggerManager final {
 public:
+	NONECOPYABLE(LoggerManager);
 	LoggerManager();
 
 	void log(const std::string& name, LogEvent::ptr p_event);

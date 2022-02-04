@@ -5,7 +5,7 @@ set(CMAKE_VERBOSE_MAKEFILE  ON)
 
 include_directories(./src)
 
-add_compile_options(-std=c++17 -g)
+add_compile_options(-std=c++11 -g)
 
 find_package(yaml-cpp REQUIRED)
 

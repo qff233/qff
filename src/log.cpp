@@ -52,16 +52,18 @@ LogAppender::LogAppender(const std::string& name, LogLevel::Level level)
 }
 
 FileLogAppender::FileLogAppender(const std::string& name
-								, LogLevel::Level level) 
+								, LogLevel::Level level
+								, const std::string& file_name) 
 	:LogAppender(name, level) {
+	FSUtils::OpenForWrite(m_ofs, file_name, std::ios_base::app);
 }
 
 FileLogAppender::~FileLogAppender() {
-
+	m_ofs.close();
 }
 
 void FileLogAppender::output(const std::string& str) {
-	
+	m_ofs << str << std::endl;
 }
 
 StandLogAppender::StandLogAppender(const std::string& name
