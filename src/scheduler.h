@@ -13,18 +13,18 @@
 
 namespace qff {
     
-struct FiberAndThread {
+struct __FiberAndThread {
     typedef std::function<void()> CallBackType;
     Fiber::ptr fiber;
     ::pid_t thread_id = -1;
 
     void clear();
 
-    FiberAndThread() noexcept;
-    FiberAndThread(Fiber::ptr fib, ::pid_t id = -1) noexcept;
-    FiberAndThread(CallBackType cb, ::pid_t id = -1) noexcept;
-    FiberAndThread(const FiberAndThread& fat) noexcept;
-    FiberAndThread& operator=(const FiberAndThread& fat);
+    __FiberAndThread() noexcept;
+    __FiberAndThread(Fiber::ptr fib, ::pid_t id = -1) noexcept;
+    __FiberAndThread(CallBackType cb, ::pid_t id = -1) noexcept;
+    __FiberAndThread(const __FiberAndThread& fat) noexcept;
+    __FiberAndThread& operator=(const __FiberAndThread& fat);
 };
 
 class Fiber;
@@ -37,33 +37,34 @@ public:
     typedef Mutex MutexType;
 
     typedef std::function<void()> CallBackType;
-    typedef std::list<FiberAndThread> FListType;
+    typedef std::list<__FiberAndThread> FListType;
     typedef std::vector<Thread::ptr> TPoolType;
 
     static Scheduler* GetThis();
 
-    Scheduler(size_t threads = 1, const std::string& name="", bool use_caller = true) noexcept;
+    Scheduler(size_t thread_count = 1, const std::string& name="", bool use_caller = true);
     virtual ~Scheduler() noexcept;
 
-    void start() noexcept;
+    void start();
     void stop() noexcept;
 
-    void schedule(Fiber::ptr fiber, ::pid_t thread_id = -1) noexcept;
-    void schedule(CallBackType cb, ::pid_t thread_id = -1) noexcept;
-    void schedule(const std::vector<Fiber::ptr>& fibs) noexcept;
-    void schedule(const std::vector<CallBackType>& cbs) noexcept;
+    void schedule(Fiber::ptr fiber, ::pid_t thread_id = -1);
+    void schedule(CallBackType cb, ::pid_t thread_id = -1);
+    void schedule(const std::vector<Fiber::ptr>& fibs);
+    void schedule(const std::vector<CallBackType>& cbs);
 
     const std::string& get_name() const { return m_name; }
 private:
     static Fiber* GetCacheFiber() noexcept;
     void idle_base();
 protected:
+    virtual void init();
     virtual void tickle() noexcept;
     virtual bool stopping() noexcept;
-    virtual void idle() noexcept;
-    void run() noexcept;
+    virtual void idle();
+    void run();
 
-    bool has_idle_threads();
+    bool has_idle_threads() noexcept;
 private:
     MutexType m_mutex;
     FListType m_fiber_list;

@@ -10,30 +10,30 @@ namespace qff {
 static thread_local Scheduler* t_scheduler = nullptr;
 static thread_local Fiber* t_cache_fiber = nullptr;
 
-void FiberAndThread::clear() {
+void __FiberAndThread::clear() {
     fiber.reset();
     thread_id = -1;
 }
 
-FiberAndThread::FiberAndThread() noexcept {
+__FiberAndThread::__FiberAndThread() noexcept {
 }
 
-FiberAndThread::FiberAndThread(Fiber::ptr fib, ::pid_t id) noexcept 
+__FiberAndThread::__FiberAndThread(Fiber::ptr fib, ::pid_t id) noexcept 
     :fiber(fib)
     ,thread_id(id) {
 }
 
-FiberAndThread::FiberAndThread(CallBackType cb, ::pid_t id) noexcept 
+__FiberAndThread::__FiberAndThread(CallBackType cb, ::pid_t id) noexcept 
     :thread_id(id) {
     fiber = std::make_shared<Fiber>(cb);
 }
 
-FiberAndThread::FiberAndThread(const FiberAndThread& fat) noexcept {
+__FiberAndThread::__FiberAndThread(const __FiberAndThread& fat) noexcept {
     fiber = fat.fiber;
     thread_id = fat.thread_id;
 }
 
-FiberAndThread& FiberAndThread::operator=(const FiberAndThread& fat) {
+__FiberAndThread& __FiberAndThread::operator=(const __FiberAndThread& fat) {
     fiber = fat.fiber;
     thread_id = fat.thread_id;
     return *this;
@@ -47,12 +47,12 @@ Fiber* Scheduler::GetCacheFiber() noexcept {
     return t_cache_fiber;
 }
 
-Scheduler::Scheduler(size_t threads, const std::string& name, bool use_caller) noexcept 
+Scheduler::Scheduler(size_t thread_count, const std::string& name, bool use_caller)
     :m_name(name) {
     
     if(use_caller) {
         Fiber::Init();
-        --threads;
+        --thread_count;
 
         assert(t_scheduler == nullptr);
         t_scheduler = this;
@@ -69,7 +69,7 @@ Scheduler::Scheduler(size_t threads, const std::string& name, bool use_caller) n
     } else {
         m_root_thread_id = -1;
     }
-    m_thread_count = threads;
+    m_thread_count = thread_count;
 }
 
 Scheduler::~Scheduler() noexcept {
@@ -78,7 +78,9 @@ Scheduler::~Scheduler() noexcept {
         t_scheduler = nullptr;
 }
 
-void Scheduler::start() noexcept {
+void Scheduler::start() {
+    if(!m_is_stop)
+        return;
     assert(m_is_stop);
     assert(!m_stop_sign);
     m_is_stop = false;
@@ -112,7 +114,7 @@ void Scheduler::stop() noexcept {
     m_is_stop = true;
 }
 
-void Scheduler::schedule(Fiber::ptr fiber, pid_t thread_id) noexcept {
+void Scheduler::schedule(Fiber::ptr fiber, pid_t thread_id) {
     MutexType::Lock lock(m_mutex);
     bool need_tickle = m_fiber_list.empty();
     m_fiber_list.emplace_back(fiber, thread_id);
@@ -121,7 +123,7 @@ void Scheduler::schedule(Fiber::ptr fiber, pid_t thread_id) noexcept {
         this->tickle();
 }
 
-void Scheduler::schedule(CallBackType cb, pid_t thread_id) noexcept {
+void Scheduler::schedule(CallBackType cb, pid_t thread_id) {
     MutexType::Lock lock(m_mutex);
     bool need_tickle = m_fiber_list.empty();
     m_fiber_list.emplace_back(cb, thread_id);
@@ -130,7 +132,7 @@ void Scheduler::schedule(CallBackType cb, pid_t thread_id) noexcept {
         this->tickle();
 }
 
-void Scheduler::schedule(const std::vector<Fiber::ptr>& fibs) noexcept {
+void Scheduler::schedule(const std::vector<Fiber::ptr>& fibs) {
     MutexType::Lock lock(m_mutex);
     bool need_tickle = m_fiber_list.empty();
     for(auto i : fibs) {
@@ -141,7 +143,7 @@ void Scheduler::schedule(const std::vector<Fiber::ptr>& fibs) noexcept {
         this->tickle();
 }
 
-void Scheduler::schedule(const std::vector<CallBackType>& cbs) noexcept {
+void Scheduler::schedule(const std::vector<CallBackType>& cbs) {
     MutexType::Lock lock(m_mutex);
     bool need_tickle = m_fiber_list.empty();
     for(auto i : cbs) {
@@ -149,6 +151,10 @@ void Scheduler::schedule(const std::vector<CallBackType>& cbs) noexcept {
     }
     if(need_tickle) 
         this->tickle();
+}
+
+void Scheduler::init() {
+    QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::init()";
 }
 
 void Scheduler::tickle() noexcept {
@@ -160,20 +166,20 @@ bool Scheduler::stopping() noexcept {
     return true;
 }
 
-void Scheduler::idle() noexcept {
+void Scheduler::idle() {
     while(!m_is_stop) {
         QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::idle()";
         Fiber::YieldToHold();
     }
 }
 
-void Scheduler::run() noexcept {
+void Scheduler::run() {
     t_scheduler = this;
     Fiber::Init();
-
+    this->init();
     auto func = std::bind(&Scheduler::idle, this);
     Fiber::ptr idle_fiber = std::make_shared<Fiber>(func);
-    FiberAndThread ft;
+    __FiberAndThread ft;
     bool tick_me;
     MutexType::Lock lock(m_mutex, false);
     while(true) {
@@ -205,7 +211,7 @@ void Scheduler::run() noexcept {
         }
 
         if(tick_me)
-            tickle();
+            this->tickle();
 
         if(ft.fiber && ft.fiber->m_state != Fiber::TERM 
             && ft.fiber->m_state != Fiber::EXCEPT) {
@@ -227,7 +233,7 @@ void Scheduler::run() noexcept {
     }
 } //Scheduler::run()
 
-bool Scheduler::has_idle_threads() {
+bool Scheduler::has_idle_threads() noexcept {
     return m_idle_thread_count > 0;
 }
 

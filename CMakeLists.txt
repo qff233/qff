@@ -28,5 +28,8 @@ target_link_libraries(qff yaml-cpp pthread)
 add_executable(test_fiber test/test_fiber)
 target_link_libraries(test_fiber qff)
 
+add_executable(test_iomanager test/test_iomanager)
+target_link_libraries(test_iomanager qff)
+
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
