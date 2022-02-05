@@ -77,8 +77,8 @@ protected:
     std::atomic<size_t> m_active_thread_count = {0};
     std::atomic<size_t> m_idle_thread_count = {0};
     ::pid_t m_root_thread_id = -1;
-    bool m_stop_sign = false;
-    bool m_is_stop = true;
+    std::atomic<bool> m_stop_sign = {false};
+    std::atomic<bool> m_is_stop = {true};
 };
 
 } // namespace qff

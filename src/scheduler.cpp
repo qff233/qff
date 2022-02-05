@@ -100,9 +100,7 @@ void Scheduler::stop() noexcept {
     if(m_is_stop)
         return;
     
-    MutexType::Lock lock(m_mutex);
     m_stop_sign = true;
-    lock.unlock();
 
     if(m_root_fiber) 
         m_root_fiber->call();
@@ -163,7 +161,7 @@ bool Scheduler::stopping() noexcept {
 }
 
 void Scheduler::idle() noexcept {
-    while(!m_stop_sign) {
+    while(!m_is_stop) {
         QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::idle()";
         Fiber::YieldToHold();
     }
@@ -177,12 +175,10 @@ void Scheduler::run() noexcept {
     Fiber::ptr idle_fiber = std::make_shared<Fiber>(func);
     FiberAndThread ft;
     bool tick_me;
-    bool is_active;
     MutexType::Lock lock(m_mutex, false);
     while(true) {
         ft.clear();
         tick_me = false;
-        is_active =false;
 
         lock.lock();
         auto it = m_fiber_list.begin();
@@ -206,7 +202,6 @@ void Scheduler::run() noexcept {
 
         if(ft.fiber) {
             ++m_active_thread_count;
-            is_active = true;
         }
 
         if(tick_me)
@@ -219,16 +214,15 @@ void Scheduler::run() noexcept {
             if(ft.fiber->m_state == Fiber::READY)
                 this->schedule(ft.fiber);
         } else {
-            if(is_active) {
-                --m_active_thread_count;
-                continue;
-            }
-            if(m_stop_sign && idle_fiber->m_state == Fiber::TERM)
-                break;
 
             ++m_idle_thread_count;
             idle_fiber->swap_in();
             --m_idle_thread_count;
+
+            if(idle_fiber->m_state == Fiber::TERM)
+                break;
+            if(m_stop_sign && this->stopping())
+                m_is_stop = true; 
         }
     }
 } //Scheduler::run()

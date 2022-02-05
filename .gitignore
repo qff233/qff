@@ -35,4 +35,4 @@ build
 *.so
 !.gitignore
 /.vscode/
-test_*
+bin/*
