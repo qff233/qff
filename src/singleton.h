@@ -18,7 +18,7 @@ public:
     static void Delete() {
         if (Get() == nullptr) return;
         delete Get();
-        *GetPPtr() == nullptr;
+        *GetPPtr() = nullptr;
     }
 private:
     static T** GetPPtr() {

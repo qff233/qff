@@ -6,7 +6,7 @@ set(CMAKE_VERBOSE_MAKEFILE  ON)
 
 include_directories(./src)
 
-add_compile_options(-std=c++11 -g)
+add_compile_options(-std=c++17  -ggdb -Wall -Werror -Wno-unused-function -Wno-builtin-macro-redefined -Wno-deprecated-declarations)
 
 find_package(yaml-cpp REQUIRED)
 

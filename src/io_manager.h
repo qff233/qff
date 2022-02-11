@@ -2,39 +2,12 @@
 #define __IO_MANAGER_H__
 
 #include <memory>
+#include <variant>
 
 #include "scheduler.h"
 
 namespace qff {
 
-enum EventType {
-    E_T_NONE  = 0x0,
-    E_T_READ  = 0x1,
-    E_T_WRITE = 0x4
-};
-
-struct __EventContext {
-    typedef std::function<void()> CallBackType;
-
-    Scheduler* scheduler = nullptr;
-    Fiber::ptr fiber;
-    CallBackType cb;
-
-    void clear() noexcept;
-};
-
-struct __FdContext {
-    typedef Mutex MutexType;
-
-    __EventContext read;
-    __EventContext write;
-    int fd = 0;
-    EventType event_types = E_T_NONE;
-    MutexType mutex;
-    
-    __EventContext& get_context(EventType event_type) noexcept;
-    void trigger_event(EventType event_type);
-};
 
 class IOManager final : public Scheduler {
 public:
@@ -42,18 +15,49 @@ public:
     typedef std::function<void()> CallBackType;
     typedef RWMutex RWMutexType;
 
+    enum EventType {
+        NONE  = 0x0,
+        READ  = 0x1,
+        WRITE = 0x4,
+    };
+private:
+    struct EventContext {
+        typedef std::function<void()> CallBackType;
+        typedef std::variant<Fiber::ptr, CallBackType> ContextType;
+
+        Scheduler* scheduler = nullptr;
+        ContextType fiber_or_func;
+
+        void clear() noexcept;
+    };
+
+    struct FdContext {
+        typedef Mutex MutexType;
+
+        EventContext read;
+        EventContext write;
+
+        int fd = 0;
+        EventType events = NONE;
+
+        MutexType mutex;
+
+        EventContext& get_context(EventType event) noexcept;
+        void trigger_event(EventType event);
+    };
+public:
     static IOManager* GetThis();
 
     IOManager(size_t thread_count = 1, const std::string& name = "", bool use_caller = true);
     ~IOManager() noexcept;
 
-    int add_event(int fd, EventType event_type, CallBackType cb = nullptr);
-    int del_event(int fd, EventType event_type) noexcept;
+    int add_event(int fd, EventType event, CallBackType cb = nullptr) noexcept;
+    int del_event(int fd, EventType event) noexcept;
 
-    int cancel_event(int fd, EventType event_type) noexcept;
+    int cancel_event(int fd, EventType event) noexcept;
     int cancel_all(int fd) noexcept;
 protected:
-    void context_resize(size_t size);
+    void contexts_resize(size_t size) noexcept;
 
     void init() override;
     void tickle() noexcept override;
@@ -64,7 +68,7 @@ private:
     int m_tickle_fds[2];
     std::atomic<size_t> m_pending_event_count = {0};
     RWMutexType m_mutex;
-    std::vector<__FdContext*> m_fd_contexts;
+    std::vector<FdContext*> m_fd_contexts;
 };
 
 } // namespace qff

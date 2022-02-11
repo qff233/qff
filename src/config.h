@@ -28,8 +28,8 @@ struct ConfigVar {
 }; //struct ConfigVar
 
 class Config {
+friend std::ostream& operator<<(std::ostream& os, const Config& config);
 public:
-    friend std::ostream& operator<<(std::ostream& os, const Config& config);
     using NodeType = ConfigVar;
     using NodesType = std::vector<ConfigVar::ptr>;
     NONECOPYABLE(Config);

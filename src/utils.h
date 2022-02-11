@@ -3,49 +3,50 @@
 
 #include <string>
 #include <vector>
+#include <string_view>
 #include "yaml-cpp/yaml.h"
 #include "fiber.h"
 
 namespace qff {
 
-pid_t GetThreadId();
+pid_t GetThreadId() noexcept;
 std::string GetThreadName();
 
-fid_t GetFiberId();
+fid_t GetFiberId() noexcept;
 
-time_t GetCurrentMS();
-time_t GetCurrentUS();
+time_t GetCurrentMS() noexcept;
+time_t GetCurrentUS() noexcept;
 
 namespace StringUtils {
-    std::string StringToUpper(const std::string& str);
-    std::string StringToLower(const std::string& str);
+    std::string StringToUpper(std::string_view str) noexcept;
+    std::string StringToLower(std::string_view str) noexcept;
 
-    std::vector<std::string> Spilt(const std::string& str, char sign);
+    std::vector<std::string> Spilt(std::string_view str, char sign);
 
     std::string Format(const char* fmt, ...);
 }
 
 namespace FSUtils {
-    std::vector<std::string> ListAllFile(const std::string& path);
-    bool MkDir(const std::string& dirname);
-    bool IsRunningPidFile(const std::string& pidfile);
-    bool Rm(const std::string& path);
-    bool Mv(const std::string& from, const std::string& to);
-    bool RealPath(const std::string& path, std::string& rpath);
-    bool SymLink(const std::string& frm, const std::string& to);
-    bool UnLink(const std::string& filename, bool exist = false);
-    std::string DirName(const std::string& filename);
-    std::string BaseName(const std::string& filename);
-    bool OpenForRead(std::ifstream& ifs, const std::string& filename
+    std::vector<std::string> ListAllFile(std::string_view path);
+    bool MkDir(std::string_view dirname) noexcept;
+    bool IsRunningPidFile(std::string_view pidfile);
+    bool Rm(std::string_view path);
+    bool Mv(std::string_view from, std::string_view to);
+    bool RealPath(std::string_view path, std::string& rpath) noexcept;
+    bool SymLink(std::string_view frm, std::string_view to) noexcept;
+    bool UnLink(std::string_view filename, bool exist = false) noexcept;
+    std::string DirName(std::string_view filename) noexcept;
+    std::string BaseName(std::string_view filename) noexcept;
+    bool OpenForRead(std::ifstream& ifs, std::string_view filename
                     ,std::ios_base::openmode mode);
-    bool OpenForWrite(std::ofstream& ofs, const std::string& filename
+    bool OpenForWrite(std::ofstream& ofs, std::string_view filename
                     ,std::ios_base::openmode mode);
 }
 
-std::string Time2Str(time_t ts = time(0), const std::string& format = "%Y-%m-%d %H:%M:%S");
-time_t Str2Time(const char* str, const char* format = "%Y-%m-%d %H:%M:%S");
+std::string Time2Str(time_t ts = time(0), std::string_view format = "%Y-%m-%d %H:%M:%S") noexcept;
+time_t Str2Time(const char* str, const char* format = "%Y-%m-%d %H:%M:%S") noexcept;
 
-YAML::Node GetYamlFromFile(const std::string& file_name);
+YAML::Node GetYamlFromFile(std::string_view file_name);
 
 }
 

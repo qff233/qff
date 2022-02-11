@@ -12,34 +12,33 @@
 #include "fiber.h"
 
 namespace qff {
-    
-struct __FiberAndThread {
-    typedef std::function<void()> CallBackType;
-    Fiber::ptr fiber;
-    ::pid_t thread_id = -1;
-
-    void clear();
-
-    __FiberAndThread() noexcept;
-    __FiberAndThread(Fiber::ptr fib, ::pid_t id = -1) noexcept;
-    __FiberAndThread(CallBackType cb, ::pid_t id = -1) noexcept;
-    __FiberAndThread(const __FiberAndThread& fat) noexcept;
-    __FiberAndThread& operator=(const __FiberAndThread& fat);
-};
 
 class Fiber;
 
 class Scheduler {
+friend Fiber;
+private:
+    struct FiberAndThread {
+        typedef std::function<void()> CallBackType;
+        Fiber::ptr fiber;
+        ::pid_t thread_id = -1;
+
+        void clear();
+
+        FiberAndThread() noexcept;
+        FiberAndThread(Fiber::ptr fib, ::pid_t id = -1) noexcept;
+        FiberAndThread(CallBackType cb, ::pid_t id = -1) noexcept;
+        FiberAndThread(const FiberAndThread& fat) noexcept;
+        FiberAndThread& operator=(const FiberAndThread& fat);
+    };
 public:
-    friend Fiber;
     NONECOPYABLE(Scheduler);
     typedef std::shared_ptr<Scheduler> ptr;
     typedef Mutex MutexType;
-
     typedef std::function<void()> CallBackType;
-    typedef std::list<__FiberAndThread> FListType;
+    typedef std::list<FiberAndThread> FListType;
     typedef std::vector<Thread::ptr> TPoolType;
-
+    
     static Scheduler* GetThis();
 
     Scheduler(size_t thread_count = 1, const std::string& name="", bool use_caller = true);
@@ -78,6 +77,7 @@ protected:
     std::atomic<size_t> m_active_thread_count = {0};
     std::atomic<size_t> m_idle_thread_count = {0};
     ::pid_t m_root_thread_id = -1;
+    std::atomic<bool> m_is_stopping = {false};
     std::atomic<bool> m_stop_sign = {false};
     std::atomic<bool> m_is_stop = {true};
 };

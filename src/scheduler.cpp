@@ -10,30 +10,30 @@ namespace qff {
 static thread_local Scheduler* t_scheduler = nullptr;
 static thread_local Fiber* t_cache_fiber = nullptr;
 
-void __FiberAndThread::clear() {
+void Scheduler::FiberAndThread::clear() {
     fiber.reset();
     thread_id = -1;
 }
 
-__FiberAndThread::__FiberAndThread() noexcept {
+Scheduler::FiberAndThread::FiberAndThread() noexcept {
 }
 
-__FiberAndThread::__FiberAndThread(Fiber::ptr fib, ::pid_t id) noexcept 
+Scheduler::FiberAndThread::FiberAndThread(Fiber::ptr fib, ::pid_t id) noexcept 
     :fiber(fib)
     ,thread_id(id) {
 }
 
-__FiberAndThread::__FiberAndThread(CallBackType cb, ::pid_t id) noexcept 
+Scheduler::FiberAndThread::FiberAndThread(CallBackType cb, ::pid_t id) noexcept 
     :thread_id(id) {
     fiber = std::make_shared<Fiber>(cb);
 }
 
-__FiberAndThread::__FiberAndThread(const __FiberAndThread& fat) noexcept {
+Scheduler::FiberAndThread::FiberAndThread(const Scheduler::FiberAndThread& fat) noexcept {
     fiber = fat.fiber;
     thread_id = fat.thread_id;
 }
 
-__FiberAndThread& __FiberAndThread::operator=(const __FiberAndThread& fat) {
+Scheduler::FiberAndThread& Scheduler::FiberAndThread::operator=(const FiberAndThread& fat) {
     fiber = fat.fiber;
     thread_id = fat.thread_id;
     return *this;
@@ -104,6 +104,8 @@ void Scheduler::stop() noexcept {
     
     m_stop_sign = true;
 
+    this->tickle();
+
     if(m_root_fiber) 
         m_root_fiber->call();
 
@@ -167,7 +169,7 @@ bool Scheduler::stopping() noexcept {
 }
 
 void Scheduler::idle() {
-    while(!m_is_stop) {
+    while(!m_is_stopping) {
         QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::idle()";
         Fiber::YieldToHold();
     }
@@ -179,7 +181,7 @@ void Scheduler::run() {
     this->init();
     auto func = std::bind(&Scheduler::idle, this);
     Fiber::ptr idle_fiber = std::make_shared<Fiber>(func);
-    __FiberAndThread ft;
+    FiberAndThread ft;
     bool tick_me;
     MutexType::Lock lock(m_mutex, false);
     while(true) {
@@ -225,10 +227,13 @@ void Scheduler::run() {
             idle_fiber->swap_in();
             --m_idle_thread_count;
 
-            if(idle_fiber->m_state == Fiber::TERM)
+            if(idle_fiber->m_state == Fiber::TERM) {
+                this->tickle(); //notify other sleepy therad to awake for exciting.
+                QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << m_name << ": scheduler::run() exit";
                 break;
+            }
             if(m_stop_sign && this->stopping())
-                m_is_stop = true; 
+                m_is_stopping = true; 
         }
     }
 } //Scheduler::run()

@@ -15,19 +15,19 @@ enum EpollOpt {
 };
 
 static std::ostream& operator<< (std::ostream& os, const EpollOpt& op) {
-
-#define XX(ctl) \
-    case ctl: \
-        return os << #ctl;
-
-    switch ((int)op) {
-    XX(EPOLL_CTL_ADD);
-    XX(EPOLL_CTL_MOD);
-    XX(EPOLL_CTL_DEL);
+    switch(op) {
+    case EPOLL_CTL_ADD:
+        os << "EPOLL_CTL_ADD";
+        return os;
+    case EPOLL_CTL_MOD:
+        os << "EPOLL_CTL_MOD";
+        return os;
+    case EPOLL_CTL_DEL:
+        os << "EPOLL_CTL_DEL";
+        return os;
     default:
         return os << (int)op;
     }
-#undef XX
 }
 
 static std::ostream& operator<< (std::ostream& os, EPOLL_EVENTS events) {
@@ -62,17 +62,19 @@ static std::ostream& operator<< (std::ostream& os, EPOLL_EVENTS events) {
     return os;
 }
 
-void __EventContext::clear() noexcept {
+void IOManager::EventContext::clear() noexcept {
     scheduler = nullptr;
-    fiber.reset();
-    cb = nullptr;
+    if(auto p = std::get_if<Fiber::ptr>(&fiber_or_func)) 
+        p->reset();
+    if(auto p = std::get_if<CallBackType>(&fiber_or_func))
+        *p = nullptr;
 }
 
-__EventContext& __FdContext::get_context(EventType event_type) noexcept {
-    switch(event_type) {
-    case E_T_READ:
+IOManager::EventContext& IOManager::FdContext::get_context(EventType event) noexcept {
+    switch(event) {
+    case READ:
         return read;
-    case E_T_WRITE:
+    case WRITE:
         return write;
     default:
         assert("__FdContext::getContext() invalid event");
@@ -80,15 +82,17 @@ __EventContext& __FdContext::get_context(EventType event_type) noexcept {
     std::terminate();
 }
 
-void __FdContext::trigger_event(EventType event_type) {
-    assert(event_type & event_types);
+void IOManager::FdContext::trigger_event(EventType event) {
+    assert(event & events);
 
-    event_types = (EventType)(event_types & ~event_type);
-    __EventContext& event_context = get_context(event_type);
-    if(event_context.cb)
-        event_context.scheduler->schedule(event_context.cb);
-    else
-        event_context.scheduler->schedule(event_context.fiber);
+    events = (EventType)(events & ~event);
+    EventContext& event_context = get_context(event);
+    if(auto p1 = std::get_if<CallBackType>(&event_context.fiber_or_func)) {
+        event_context.scheduler->schedule(*p1);
+    } else {
+        auto p2 = std::get_if<Fiber::ptr>(&event_context.fiber_or_func);
+        event_context.scheduler->schedule(*p2);
+    }
     
     event_context.clear();
 }
@@ -132,7 +136,7 @@ IOManager::IOManager(size_t thread_count, const std::string& name, bool use_call
         std::terminate();
     }
 
-    this->context_resize(32);
+    this->contexts_resize(32);
     this->start();
 }
 
@@ -147,41 +151,45 @@ IOManager::~IOManager() noexcept {
             continue;
         delete m_fd_contexts[i];
     }
+    if(t_iomanager == this) 
+        t_iomanager = nullptr;
 }
 
-void IOManager::context_resize(size_t size) {
+void IOManager::contexts_resize(size_t size) noexcept {
+    size_t i = m_fd_contexts.size();
     m_fd_contexts.resize(size);
     RWMutexType::WriteLock lock(m_mutex);
-    for(size_t i = 0; i < m_fd_contexts.size(); ++i) {
-        if(m_fd_contexts[i])
-            continue;
-
-        m_fd_contexts[i] = new __FdContext;
-        m_fd_contexts[i]->fd = i;
+    try {
+        for(;i < m_fd_contexts.size(); ++i) {
+            m_fd_contexts[i] = new FdContext;
+            m_fd_contexts[i]->fd = i;
+        }
+    } catch (const std::exception& e) {
+        QFF_LOG_FATAL(QFF_LOG_SYSTEM) << "In IOManager::context_resize," << e.what();
+        std::terminate();
     }
 }
 
-int IOManager::add_event(int fd, EventType event_type, CallBackType cb) {
-    __FdContext* fd_ctx = nullptr;
+int IOManager::add_event(int fd, EventType event, CallBackType cb) noexcept {
+    FdContext* fd_ctx = nullptr;
 
     RWMutexType::ReadLock lock(m_mutex);
-    size_t size = m_fd_contexts.size();
-    if(size <= fd)
-        this->context_resize(fd * 1.5);
+    if(m_fd_contexts.size() <= (size_t)fd)
+        this->contexts_resize(fd * 1.5);
     fd_ctx = m_fd_contexts[fd];
     lock.unlock();
 
-    __FdContext::MutexType::Lock lock2(fd_ctx->mutex);
-    if(UNLIKELY(fd_ctx->event_types & event_type)) {
+    FdContext::MutexType::Lock lock2(fd_ctx->mutex);
+    if(UNLIKELY(fd_ctx->events & event)) {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "addEvent assert fd=" << fd
-            << " event=" << (EPOLL_EVENTS)event_type
-            << " fd_ctx.event=" << (EPOLL_EVENTS)fd_ctx->event_types;
+            << " event=" << (EPOLL_EVENTS)event
+            << " fd_ctx.event=" << (EPOLL_EVENTS)fd_ctx->events;
     }
 
-    int ep_op = fd_ctx->event_types ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
+    int ep_op = fd_ctx->events ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
     epoll_event ep_event;
     ::memset(&ep_event, 0, sizeof(::epoll_event));
-    ep_event.events = EPOLLET | fd_ctx->event_types | event_type;
+    ep_event.events = EPOLLET | fd_ctx->events | event;
     ep_event.data.ptr = fd_ctx;
 
     int rt = ::epoll_ctl(m_epfd, ep_op, fd, &ep_event);
@@ -189,42 +197,42 @@ int IOManager::add_event(int fd, EventType event_type, CallBackType cb) {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "epoll_ctl(" << m_epfd << ", "
             << (EpollOpt)ep_op << ", " << fd << ", " << (EPOLL_EVENTS)ep_event.events << "):"
             << rt << " (" << errno << ") (" << strerror(errno) << ") fd_ctx->events="
-            << (EPOLL_EVENTS)fd_ctx->event_types;
+            << (EPOLL_EVENTS)fd_ctx->events;
         return -1;
     }
 
     ++m_pending_event_count;
 
-    fd_ctx->event_types = (EventType)(fd_ctx->event_types | event_type);
-    __EventContext& event_ctx = fd_ctx->get_context(event_type);
+    fd_ctx->events = (EventType)(fd_ctx->events | event);
+    EventContext& event_ctx = fd_ctx->get_context(event);
     if(UNLIKELY(event_ctx.scheduler)) {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "event_context has been exist";
     }
     event_ctx.scheduler = t_iomanager;
+    
     if(cb)
-        event_ctx.cb.swap(cb);
+        event_ctx.fiber_or_func = cb;
     else {
-        event_ctx.fiber.reset(Fiber::GetThis());
+        event_ctx.fiber_or_func = Fiber::ptr(Fiber::GetThis());
     }
     return 0;
 }
 
-int IOManager::del_event(int fd, EventType event_type) noexcept {
+int IOManager::del_event(int fd, EventType event) noexcept {
     RWMutexType::ReadLock lock(m_mutex);
-    __FdContext* fd_ctx;
-    size_t size = m_fd_contexts.size();
-    if(size <= fd)
+    FdContext* fd_ctx;
+    if(m_fd_contexts.size() <= (size_t)fd)
         return -1;
     fd_ctx = m_fd_contexts[fd];
     lock.unlock();
 
-    __FdContext::MutexType::Lock lock2(fd_ctx->mutex);
-    if(UNLIKELY(!(fd_ctx->event_types & event_type)))
+    FdContext::MutexType::Lock lock2(fd_ctx->mutex);
+    if(UNLIKELY(!(fd_ctx->events & event)))
         return false;
     
-    EventType new_epoll_types = (EventType)(fd_ctx->event_types & ~event_type);
+    EventType new_epoll_types = (EventType)(fd_ctx->events & ~event);
     int ep_op = new_epoll_types ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-    epoll_event ep_event;
+    ::epoll_event ep_event;
     ::memset(&ep_event, 0, sizeof(::epoll_event));
     ep_event.events = EPOLLET | new_epoll_types;
     ep_event.data.ptr = fd_ctx;
@@ -234,32 +242,31 @@ int IOManager::del_event(int fd, EventType event_type) noexcept {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "epoll_ctl(" << m_epfd << ", "
             << (EpollOpt)ep_op << ", " << fd << ", " << (EPOLL_EVENTS)ep_event.events << "):"
             << rt << " (" << errno << ") (" << strerror(errno) << ") fd_ctx->events="
-            << (EPOLL_EVENTS)fd_ctx->event_types;
+            << (EPOLL_EVENTS)fd_ctx->events;
         return -1;
     }
 
     --m_pending_event_count;
-    fd_ctx->event_types = new_epoll_types;
-    __EventContext& event_ctx = fd_ctx->get_context(event_type);
+    fd_ctx->events = new_epoll_types;
+    EventContext& event_ctx = fd_ctx->get_context(event);
     event_ctx.clear();
     return 0;
 }
 
-int IOManager::cancel_event(int fd, EventType event_type) noexcept {
+int IOManager::cancel_event(int fd, EventType event) noexcept {
     RWMutexType::ReadLock lock(m_mutex);
-    size_t size = m_fd_contexts.size();
-    if(size <= fd)
+    if(m_fd_contexts.size() <= (size_t)fd)
         return -1;
-    __FdContext* fd_ctx = m_fd_contexts[fd];
+    FdContext* fd_ctx = m_fd_contexts[fd];
     lock.unlock();
 
-    __FdContext::MutexType::Lock lock2(fd_ctx->mutex);
-    if(UNLIKELY(!(fd_ctx->event_types & event_type)))
+    FdContext::MutexType::Lock lock2(fd_ctx->mutex);
+    if(UNLIKELY(!(fd_ctx->events & event)))
         return false;
 
-    EventType new_epoll_types = (EventType)(fd_ctx->event_types & ~event_type);
+    EventType new_epoll_types = (EventType)(fd_ctx->events & ~event);
     int ep_op = new_epoll_types ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-    epoll_event ep_event;
+    ::epoll_event ep_event;
     ::memset(&ep_event, 0, sizeof(::epoll_event));
     ep_event.events = EPOLLET | new_epoll_types;
     ep_event.data.ptr = fd_ctx;
@@ -269,29 +276,28 @@ int IOManager::cancel_event(int fd, EventType event_type) noexcept {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "epoll_ctl(" << m_epfd << ", "
             << (EpollOpt)ep_op << ", " << fd << ", " << (EPOLL_EVENTS)ep_event.events << "):"
             << rt << " (" << errno << ") (" << strerror(errno) << ") fd_ctx->events="
-            << (EPOLL_EVENTS)fd_ctx->event_types;
+            << (EPOLL_EVENTS)fd_ctx->events;
         return -1;
     }
 
-    fd_ctx->trigger_event(event_type);
+    fd_ctx->trigger_event(event);
     --m_pending_event_count;
     return 0;
 }
 
 int IOManager::cancel_all(int fd) noexcept {
     RWMutexType::ReadLock lock(m_mutex);
-    size_t size = m_fd_contexts.size();
-    if(size <= fd)
+    if(m_fd_contexts.size() <= (size_t)fd)
         return -1;
-    __FdContext* fd_ctx = m_fd_contexts[fd];
+    FdContext* fd_ctx = m_fd_contexts[fd];
     lock.unlock();
 
-    __FdContext::MutexType::Lock lock2(fd_ctx->mutex);
-    if(UNLIKELY(!(fd_ctx->event_types)))
+    FdContext::MutexType::Lock lock2(fd_ctx->mutex);
+    if(UNLIKELY(!(fd_ctx->events)))
         return false;
     
     int ep_op = EPOLL_CTL_DEL;
-    epoll_event ep_event;
+    ::epoll_event ep_event;
     ::memset(&ep_event, 0, sizeof(::epoll_event));
     ep_event.events = 0;
     ep_event.data.ptr = fd_ctx;
@@ -301,17 +307,17 @@ int IOManager::cancel_all(int fd) noexcept {
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "epoll_ctl(" << m_epfd << ", "
             << (EpollOpt)ep_op << ", " << fd << ", " << (EPOLL_EVENTS)ep_event.events << "):"
             << rt << " (" << errno << ") (" << strerror(errno) << ") fd_ctx->events="
-            << (EPOLL_EVENTS)fd_ctx->event_types;
+            << (EPOLL_EVENTS)fd_ctx->events;
         return -1;
     }
 
-    if(fd_ctx->event_types & E_T_READ) {
-        fd_ctx->trigger_event(E_T_READ);
+    if(fd_ctx->events & READ) {
+        fd_ctx->trigger_event(READ);
         --m_pending_event_count;
     }
 
-    if(fd_ctx->event_types & E_T_WRITE) {
-        fd_ctx->trigger_event(E_T_WRITE);
+    if(fd_ctx->events & WRITE) {
+        fd_ctx->trigger_event(WRITE);
         --m_pending_event_count;
     }
 
@@ -325,13 +331,13 @@ void IOManager::init() {
 void IOManager::tickle() noexcept {
     if(!has_idle_threads())
         return;
-    int rt = write(m_tickle_fds[1], "T", 1);
+    int rt = ::write(m_tickle_fds[1], "T", 1);
     if(UNLIKELY(rt < 0))
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "IOManager::tickle() write error";
 }
 
 bool IOManager::stopping() noexcept {
-    return true;
+    return m_pending_event_count == 0;
 }
 
 void IOManager::idle() {
@@ -339,7 +345,7 @@ void IOManager::idle() {
     epoll_event* ep_events = new epoll_event[MAX_EVENT_COUNT];
 
     int rt = 0;
-    while (!m_is_stop) {
+    while (!m_is_stopping) {
         do {
             static const int MAX_TIMEOUT = 5000;
             rt = ::epoll_wait(m_epfd, ep_events, MAX_EVENT_COUNT, MAX_TIMEOUT);
@@ -348,7 +354,7 @@ void IOManager::idle() {
             break;
         }while(true);
 
-        for(size_t i = 0; i < rt; ++i) {
+        for(int i = 0; i < rt; ++i) {
             epoll_event& event = ep_events[i];
             if(event.data.fd == m_tickle_fds[0]) {
                 uint8_t dummy[256];
@@ -356,25 +362,25 @@ void IOManager::idle() {
                 continue;
             }
 
-            __FdContext* fd_ctx = (__FdContext*)event.data.ptr;
-            __FdContext::MutexType::Lock lock(fd_ctx->mutex);
+            FdContext* fd_ctx = (FdContext*)event.data.ptr;
+            FdContext::MutexType::Lock lock(fd_ctx->mutex);
 
             if(event.events & (EPOLLERR | EPOLLHUP)) {
                 event.events |= EPOLLIN | EPOLLOUT;
             }
 
-            int real_events = E_T_NONE;
+            int real_events = NONE;
             if(event.events & EPOLLIN) {
-                real_events |= E_T_READ;
+                real_events |= READ;
             }
             if(event.events & EPOLLOUT) {
-                real_events |= E_T_WRITE;
+                real_events |= WRITE;
             }
 
-            if((fd_ctx->event_types & real_events) == E_T_NONE) 
+            if((fd_ctx->events & real_events) == NONE) 
                 continue;
             
-            int left_event = (fd_ctx->event_types & ~real_events);
+            int left_event = (fd_ctx->events & ~real_events);
             int ep_op = left_event ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
             event.events = EPOLLET | left_event;
 
@@ -383,17 +389,17 @@ void IOManager::idle() {
                 QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "epoll_ctl(" << m_epfd << ", "
                     << (EpollOpt)ep_op << ", " << fd_ctx->fd << ", " << (EPOLL_EVENTS)event.events << "):"
                     << rt << " (" << errno << ") (" << strerror(errno) << ") fd_ctx->events="
-                    << (EPOLL_EVENTS)fd_ctx->event_types;
+                    << (EPOLL_EVENTS)fd_ctx->events;
                 continue;
             }
 
-            if(real_events & E_T_READ) {
-                fd_ctx->trigger_event(E_T_READ);
+            if(real_events & READ) {
+                fd_ctx->trigger_event(READ);
                 --m_pending_event_count;
             }
 
-            if(fd_ctx->event_types & E_T_WRITE) {
-                fd_ctx->trigger_event(E_T_WRITE);
+            if(fd_ctx->events & WRITE) {
+                fd_ctx->trigger_event(WRITE);
                 --m_pending_event_count;
             }
         }

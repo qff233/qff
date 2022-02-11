@@ -13,8 +13,8 @@ namespace qff {
 typedef ulong fid_t;    
 class Scheduler;
 class Fiber {
+friend Scheduler;
 public:
-    friend Scheduler;
     NONECOPYABLE(Fiber);
     typedef std::function<void()> CallBackType;
     typedef std::shared_ptr<Fiber> ptr;
