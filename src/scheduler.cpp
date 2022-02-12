@@ -137,7 +137,7 @@ void Scheduler::schedule(CallBackType cb, pid_t thread_id) {
 void Scheduler::schedule(const std::vector<Fiber::ptr>& fibs) {
     MutexType::Lock lock(m_mutex);
     bool need_tickle = m_fiber_list.empty();
-    for(auto i : fibs) {
+    for(const auto& i : fibs) {
         m_fiber_list.emplace_back(i);
     }
     lock.unlock();
@@ -148,9 +148,10 @@ void Scheduler::schedule(const std::vector<Fiber::ptr>& fibs) {
 void Scheduler::schedule(const std::vector<CallBackType>& cbs) {
     MutexType::Lock lock(m_mutex);
     bool need_tickle = m_fiber_list.empty();
-    for(auto i : cbs) {
+    for(const auto &i : cbs) {
         m_fiber_list.emplace_back(i);
     }
+    lock.unlock();
     if(need_tickle) 
         this->tickle();
 }
@@ -232,7 +233,7 @@ void Scheduler::run() {
                 QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << m_name << ": scheduler::run() exit";
                 break;
             }
-            if(m_stop_sign && this->stopping())
+            if(m_stop_sign && !m_sleep_sign && this->stopping())
                 m_is_stopping = true; 
         }
     }

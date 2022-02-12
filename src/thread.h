@@ -31,31 +31,22 @@ public:
         :m_mutex(mutex) {
         if(!is_lock) 
             return;
-        m_is_lock = true;
         m_mutex.lock();
     }
 
     ~ScopeLockImpl() noexcept {
-        if(m_is_lock)
-            m_mutex.unlock();
+        m_mutex.unlock();
     }
 
     void lock() noexcept {
-        if(m_is_lock)
-            return;
-        m_is_lock = true;
         m_mutex.lock();
     }
 
     void unlock() noexcept {
-        if(!m_is_lock)
-            return;
-        m_is_lock = false;
         m_mutex.unlock();
     }
 private:
     T& m_mutex;
-    bool m_is_lock;
 };
 
 template<class T>
@@ -65,31 +56,24 @@ public:
 
     ScopeReadLockImpl(T& mutex, bool is_lock = true) noexcept
         :m_mutex(mutex) {
-        m_is_lock = true;
+        if(!is_lock) 
+            return;
         m_mutex.rdlock();
     }
 
     ~ScopeReadLockImpl() noexcept {
-        if(m_is_lock) 
-            m_mutex.unlock();
+        m_mutex.unlock();
     }
 
     void lock() noexcept {
-        if(m_is_lock)
-            return;
-        m_is_lock = true;
         m_mutex.rdlock();
     }
 
     void unlock() noexcept {
-        if(!m_is_lock)
-            return;
-        m_is_lock = false;
         m_mutex.unlock();
     }
 private:
     T& m_mutex;
-    bool m_is_lock;
 };
 
 template<class T>
@@ -99,31 +83,24 @@ public:
 
     ScopeWriteLockImpl(T& mutex, bool is_lock = true) noexcept
         :m_mutex(mutex) {
-        m_is_lock = true;
+        if(!is_lock) 
+            return;
         m_mutex.wrlock();
     }
 
     ~ScopeWriteLockImpl() noexcept {
-        if(m_is_lock)
-            m_mutex.unlock();
+        m_mutex.unlock();
     }
 
     void lock() noexcept {
-        if(m_is_lock)
-            return;
-        m_is_lock = true;
         m_mutex.wrlock();
     }
 
     void unlock() noexcept {
-        if(!m_is_lock)
-            return;
-        m_is_lock = false;
         m_mutex.unlock();
     }
 private:
     T& m_mutex;
-    bool m_is_lock;
 };
 
 class Conditon final {
@@ -139,6 +116,7 @@ public:
     void wait() noexcept;
     void notify() noexcept;
 private:
+    bool m_is_locked = false;
     pthread_mutex_t m_mutex;
     pthread_cond_t m_conditon;
 };
@@ -155,6 +133,7 @@ public:
     void wrlock() noexcept;
     void unlock() noexcept;
 private:
+    bool m_is_locked = false;
     pthread_rwlock_t m_lock;
 };
 
@@ -170,6 +149,7 @@ public:
     void lock() noexcept;
     void unlock() noexcept;
 private:
+    bool m_is_locked = false;
     pthread_mutex_t m_mutex;
 };
 
@@ -185,6 +165,7 @@ public:
     void lock() noexcept;
     void unlock() noexcept;
 private:
+    bool m_is_locked = false;
     pthread_spinlock_t m_mutex;
 };
 

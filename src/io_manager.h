@@ -5,11 +5,13 @@
 #include <variant>
 
 #include "scheduler.h"
+#include "timer.h"
+#include "hook.h"
 
 namespace qff {
 
-
-class IOManager final : public Scheduler {
+class IOManager final : public Scheduler, public TimerManager {
+friend void SetSleepySign(qff::IOManager* iom, bool flag);
 public:
     typedef std::shared_ptr<IOManager> ptr;
     typedef std::function<void()> CallBackType;
@@ -56,13 +58,15 @@ public:
 
     int cancel_event(int fd, EventType event) noexcept;
     int cancel_all(int fd) noexcept;
-protected:
+private:
     void contexts_resize(size_t size) noexcept;
-
+protected:
     void init() override;
     void tickle() noexcept override;
     bool stopping() noexcept override;
     void idle() override;
+
+    void on_timer_inserted_into_front() noexcept override;
 private:
     int m_epfd = -1;
     int m_tickle_fds[2];

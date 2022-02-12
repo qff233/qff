@@ -14,7 +14,7 @@ include_directories(${yaml-cpp_INCLUDE_DIRS})
 
 aux_source_directory(./src src_list)
 add_library(qff SHARED ${src_list})
-target_link_libraries(qff yaml-cpp pthread)
+target_link_libraries(qff yaml-cpp pthread dl)
 
 # add_executable(test_log test/test_log)
 # target_link_libraries(test_log qff233)
@@ -25,11 +25,12 @@ target_link_libraries(qff yaml-cpp pthread)
 # add_executable(test_thread test/test_thread)
 # target_link_libraries(test_thread qff233)
 
-add_executable(test_fiber test/test_fiber)
-target_link_libraries(test_fiber qff)
+#add_executable(test_fiber test/test_fiber)
+#target_link_libraries(test_fiber qff)
 
 add_executable(test_iomanager test/test_iomanager)
 target_link_libraries(test_iomanager qff)
+
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

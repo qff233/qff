@@ -6,17 +6,19 @@
 #include "yaml-cpp/yaml.h"
 #include "singleton.h"
 #include "macro.h"
+#include "thread.h"
 
 namespace qff {
 
 struct ConfigVar {
-    using ptr = std::shared_ptr<ConfigVar>;
+    typedef std::shared_ptr<ConfigVar> ptr;
 
     enum Type {
         NONE   = 0,
         STRING = 1,
         LIST   = 2
     };
+
     std::string key;
     std::string val;
     Type type;
@@ -30,9 +32,10 @@ struct ConfigVar {
 class Config {
 friend std::ostream& operator<<(std::ostream& os, const Config& config);
 public:
-    using NodeType = ConfigVar;
-    using NodesType = std::vector<ConfigVar::ptr>;
     NONECOPYABLE(Config);
+    typedef  ConfigVar NodeType;
+    typedef  std::vector<ConfigVar::ptr> NodesType;
+    
     
     Config();
 

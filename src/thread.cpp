@@ -3,6 +3,8 @@
 #include "utils.h"
 #include "log.h"
 
+#include <iostream>
+
 namespace qff {
 
 static thread_local Thread* t_thread = nullptr;
@@ -31,8 +33,10 @@ void Semaphore::notify() {
 }
 
 Conditon::Conditon() noexcept {
-    ::pthread_mutex_init(&m_mutex, nullptr);
-    ::pthread_cond_init(&m_conditon, nullptr);
+    int rt = ::pthread_mutex_init(&m_mutex, nullptr);
+    if(rt) std::terminate();
+    rt = ::pthread_cond_init(&m_conditon, nullptr);
+    if(rt) std::terminate();
 }
 
 Conditon::~Conditon() noexcept {
@@ -41,10 +45,16 @@ Conditon::~Conditon() noexcept {
 }
 
 void Conditon::lock() noexcept {
+    if(m_is_locked) 
+        return;
+    m_is_locked = true;
     ::pthread_mutex_lock(&m_mutex);
 }
 
 void Conditon::unlock() noexcept {
+    if(!m_is_locked)
+        return;
+    m_is_locked = false;
     ::pthread_mutex_unlock(&m_mutex);
 }
 
@@ -57,7 +67,9 @@ void Conditon::notify() noexcept {
 }
 
 RWMutex::RWMutex() noexcept {
-    ::pthread_rwlock_init(&m_lock, nullptr);
+    int rt = ::pthread_rwlock_init(&m_lock, nullptr);
+    if(rt)
+        std::terminate();
 }
 
 RWMutex::~RWMutex() noexcept {
@@ -65,19 +77,30 @@ RWMutex::~RWMutex() noexcept {
 }
 
 void RWMutex::rdlock() noexcept {
+    if(m_is_locked)
+        return;
+    m_is_locked = true;
     ::pthread_rwlock_rdlock(&m_lock);
 }
 
 void RWMutex::wrlock() noexcept {
+    if(m_is_locked)
+        return;
+    m_is_locked = true;
     ::pthread_rwlock_wrlock(&m_lock);
 }
 
 void RWMutex::unlock() noexcept {
+    if(!m_is_locked)
+        return;
+    m_is_locked = false;
     ::pthread_rwlock_unlock(&m_lock);
 }
 
 Mutex::Mutex() noexcept {
-    ::pthread_mutex_init(&m_mutex, nullptr);
+    int rt = ::pthread_mutex_init(&m_mutex, nullptr);
+    if(rt)
+        std::terminate();
 }
 
 Mutex::~Mutex() noexcept {
@@ -85,15 +108,23 @@ Mutex::~Mutex() noexcept {
 }
 
 void Mutex::lock() noexcept {
+    if(m_is_locked)
+        return;
+    m_is_locked = true;
     ::pthread_mutex_lock(&m_mutex);
 }
 
 void Mutex::unlock() noexcept {
+    if(!m_is_locked)
+        return;
+    m_is_locked = false;
     ::pthread_mutex_unlock(&m_mutex);
 }
 
 SpinLock::SpinLock() noexcept {
-    ::pthread_spin_init(&m_mutex, 0);
+    int rt = ::pthread_spin_init(&m_mutex, 0);
+    if(rt)
+        std::terminate();
 }
 
 SpinLock::~SpinLock() noexcept {
@@ -101,10 +132,16 @@ SpinLock::~SpinLock() noexcept {
 }
 
 void SpinLock::lock() noexcept {
+    if(m_is_locked)
+        return;
+    m_is_locked = true;
     ::pthread_spin_lock(&m_mutex);
 }
 
 void SpinLock::unlock() noexcept {
+    if(!m_is_locked)
+        return;
+    m_is_locked = false;
     ::pthread_spin_unlock(&m_mutex);
 }
 

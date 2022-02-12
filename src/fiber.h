@@ -11,8 +11,9 @@
 namespace qff {
 
 typedef ulong fid_t;    
+
 class Scheduler;
-class Fiber {
+class Fiber : public std::enable_shared_from_this<Fiber>{
 friend Scheduler;
 public:
     NONECOPYABLE(Fiber);
@@ -29,7 +30,7 @@ public:
     };
 
     static fid_t GetFiberId() noexcept;
-    static Fiber* GetThis() noexcept;
+    static Fiber::ptr GetThis() noexcept;
     static Fiber::ptr GetCacheFiber() noexcept;
     static void Init() noexcept;
     static void YieldToReady() noexcept;

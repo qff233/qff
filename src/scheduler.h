@@ -79,6 +79,7 @@ protected:
     ::pid_t m_root_thread_id = -1;
     std::atomic<bool> m_is_stopping = {false};
     std::atomic<bool> m_stop_sign = {false};
+    std::atomic<bool> m_sleep_sign = {false};
     std::atomic<bool> m_is_stop = {true};
 };
 

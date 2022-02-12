@@ -1,6 +1,7 @@
 #include "io_manager.h"
 #include "macro.h"
 #include "log.h"
+#include "fd_manager.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -105,6 +106,7 @@ IOManager* IOManager::GetThis() {
 
 IOManager::IOManager(size_t thread_count, const std::string& name, bool use_caller) 
     :Scheduler(thread_count, name, use_caller) {
+    FdMgr::New();
     m_epfd = ::epoll_create(6666);
     if(m_epfd <= 0) {
         QFF_LOG_FATAL(QFF_LOG_SYSTEM) << "epoll_create() fatal";
@@ -145,7 +147,7 @@ IOManager::~IOManager() noexcept {
     ::close(m_epfd);
     ::close(m_tickle_fds[0]);
     ::close(m_tickle_fds[1]);
-
+    FdMgr::Delete();
     for(size_t i = 0; i < m_fd_contexts.size(); ++i) {
         if(!m_fd_contexts[i])
             continue;
@@ -158,6 +160,7 @@ IOManager::~IOManager() noexcept {
 void IOManager::contexts_resize(size_t size) noexcept {
     size_t i = m_fd_contexts.size();
     m_fd_contexts.resize(size);
+    m_mutex.unlock();
     RWMutexType::WriteLock lock(m_mutex);
     try {
         for(;i < m_fd_contexts.size(); ++i) {
@@ -337,22 +340,35 @@ void IOManager::tickle() noexcept {
 }
 
 bool IOManager::stopping() noexcept {
-    return m_pending_event_count == 0;
+    this->timer_manager_stop();
+    return (m_pending_event_count == 0
+        && !has_timer());
 }
 
 void IOManager::idle() {
-    static const size_t MAX_EVENT_COUNT = 256;
+    static const size_t MAX_EVENT_COUNT = 64;
     epoll_event* ep_events = new epoll_event[MAX_EVENT_COUNT];
-
+    QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << "IOManager::idle()";
     int rt = 0;
+    int next_timeout;
+    std::vector<Timer::CallBackType> cbs;
     while (!m_is_stopping) {
+
         do {
             static const int MAX_TIMEOUT = 5000;
-            rt = ::epoll_wait(m_epfd, ep_events, MAX_EVENT_COUNT, MAX_TIMEOUT);
+            next_timeout = this->get_next_time() - GetCurrentMS();
+            next_timeout = next_timeout < MAX_TIMEOUT ? next_timeout : MAX_TIMEOUT;
+            rt = ::epoll_wait(m_epfd, ep_events, MAX_EVENT_COUNT, next_timeout);
             if(rt < 0 && errno == EINTR)
                 continue;
             break;
         }while(true);
+
+        cbs = std::move(this->list_expired_cb());
+        if(!cbs.empty()) {
+            this->schedule(cbs);
+            cbs.clear();
+        }
 
         for(int i = 0; i < rt; ++i) {
             epoll_event& event = ep_events[i];
@@ -408,6 +424,10 @@ void IOManager::idle() {
     }
 
     delete[] ep_events;
+}
+
+void IOManager::on_timer_inserted_into_front() noexcept {
+    this->tickle();
 }
 
 } // namespace qff

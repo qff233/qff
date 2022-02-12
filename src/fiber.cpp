@@ -25,8 +25,8 @@ Fiber::ptr Fiber::GetCacheFiber() noexcept {
     return fiber;
 }
 
-Fiber* Fiber::GetThis() noexcept {
-    return t_fiber;
+Fiber::ptr Fiber::GetThis() noexcept {
+    return t_fiber->shared_from_this();
 }
  
 void Fiber::Init() noexcept {

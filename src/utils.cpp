@@ -48,13 +48,15 @@ namespace StringUtils {
 
 std::string StringToUpper(std::string_view str) noexcept {
     std::string rt;
-    std::transform(str.begin(), str.end(), rt, ::toupper);
+    rt.resize(str.size());
+    std::transform(str.begin(), str.end(), rt.begin(), ::toupper);
     return rt;
 }
 
 std::string StringToLower(std::string_view str) noexcept {
     std::string rt;
-    std::transform(str.begin(), str.end(), rt, ::tolower);
+    rt.resize(str.size());
+    std::transform(str.begin(), str.end(), rt.begin(), ::tolower);
     return rt;
 }
 
