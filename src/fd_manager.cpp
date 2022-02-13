@@ -31,32 +31,33 @@ FdContext::FdContext(int fd) noexcept
         sys_non_block = true;
     } else 
         sys_non_block = false;
-
-    user_non_block = false;
-    is_closed = false;
 }
 
 FdManager::FdManager() {
     m_datas.resize(64);
 }
 
-FdContext::ptr FdManager::add_and_get_fdctx(int fd, bool auto_create) {
+FdContext::ptr FdManager::add_or_get_fdctx(int fd, bool auto_create) {
     RWMutexType::ReadLock lock(m_mutex);
+
     if(m_datas.size() <= (size_t)fd) {
         if(!auto_create)
             return nullptr;
-    } else {
-        if(m_datas[fd] || !auto_create)
-            return m_datas[fd];
+        lock.unlock();
+        RWMutexType::WriteLock lock2(m_mutex);
+
+        m_datas.resize(m_datas.size() * 1.5);
     }
-    lock.unlock();
-    RWMutexType::WriteLock lock2(m_mutex);
+    
+    if(m_datas[fd])
+        return m_datas[fd];
+
     FdContext::ptr ctx = std::make_shared<FdContext>(fd);
     m_datas[fd] = ctx;
     return ctx;
 }
 
-void FdManager::del_fdctx(int fd) {
+void FdManager::del_fdctx(int fd) noexcept {
     RWMutexType::WriteLock lock(m_mutex);
     if(m_datas.size() <= (size_t)fd)
         return;

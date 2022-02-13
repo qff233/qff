@@ -67,76 +67,76 @@ void SetSleepySign(qff::IOManager* iom, bool flag) {
 
 } //namespace qff
 
-struct timer_info {
+struct timer_cond {
     int cancelled = 0;
 };
 
 template<class OriginFun, typename ... Args>
 static ssize_t do_io(int fd, OriginFun fun, std::string_view hook_fun_name,
         qff::IOManager::EventType event, int timeout_so, Args&&... args) {
-    if(!qff::t_hook_enable) {
+    if(!qff::t_hook_enable)
         return fun(fd, std::forward<Args>(args)...);
-    }
+    
+    //QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << hook_fun_name << " is hooked";
 
-    qff::FdContext::ptr ctx_ptr = qff::FdMgr::Get()->add_and_get_fdctx(fd);
-    if(!ctx_ptr) {
+    qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_or_get_fdctx(fd);
+
+    if(!ctx)
         return fun(fd, std::forward<Args>(args)...);
-    }
 
-    qff::FdContext ctx = *ctx_ptr;
-    if(ctx.is_closed) {
+    if(!ctx->is_init) {
         errno = EBADF;
         return -1;
     }
 
-    if(!ctx.is_socket || ctx.user_non_block) {
+    if(!ctx->is_socket || !ctx->sys_non_block)
         return fun(fd, std::forward<Args>(args)...);
-    }
 
-    int to_time = timeout_so == SO_RCVTIMEO ? 
-                    ctx.recv_timeout : ctx.send_timeout;
 
-    std::shared_ptr<timer_info> t_info = std::make_shared<timer_info>();
+    int timeout = timeout_so == SO_RCVTIMEO ? 
+                    ctx->recv_timeout : ctx->send_timeout;
 
-    ssize_t n = fun(fd, std::forward<Args>(args)...);
-    while(n == -1 && errno == EINTR) {
-        n = fun(fd, std::forward<Args>(args)...);
-    }
-    if(n == -1 && errno == EAGAIN) {
-        qff::IOManager* iom = qff::IOManager::GetThis();
-        qff::Timer::ptr timer;
-        std::weak_ptr<timer_info> weak_info(t_info);
+    std::shared_ptr<timer_cond> t_cond = std::make_shared<timer_cond>();
+    ssize_t result = -1;
 
-        if(to_time != -1)
-            timer = iom->add_cond_timer(to_time, [weak_info, fd, iom, event]{
-                auto t = weak_info.lock();
-                if(!t || t->cancelled)
-                    return;
-                t->cancelled = ETIMEDOUT;
-                iom->cancel_event(fd, event);
-            }, weak_info);
-        //int c = 0;
-        //int now = 0;
+    do {
+        result = fun(fd, std::forward<Args>(args)...);
+        while(result == -1 && errno == EINTR) {
+            result = fun(fd, std::forward<Args>(args)...);
+        }
+        if(result == -1 && errno == EAGAIN) {
+            qff::IOManager* iom = qff::IOManager::GetThis();
+            qff::Timer::ptr timer;
 
-        int rt = iom->add_event(fd, event);
-        if(rt) {
-            QFF_LOG_ERROR(QFF_LOG_SYSTEM) << hook_fun_name << " addEvent("
-                << fd << ", " << event << ")";
-            if(timer) {
+            if(timeout != -1)
+                timer = iom->add_cond_timer(timeout, [&t_cond, fd, iom, event]{
+                    t_cond->cancelled = ETIMEDOUT;
+                    iom->cancel_event(fd, event);
+                }, t_cond);
+
+            int rt = iom->add_event(fd, event);
+            if(UNLIKELY(rt)) {
+                QFF_LOG_ERROR(QFF_LOG_SYSTEM) << hook_fun_name << " addEvent("
+                    << fd << ", " << event << ")";
                 timer->cancel();
-            }
-            return -1;
-        } else {
-            qff::Fiber::YieldToHold();
-            if(timer) 
-                timer->cancel();
-            if(t_info->cancelled) {
-                errno = t_info->cancelled;
                 return -1;
             }
+
+            qff::Fiber::YieldToHold(); // One probability is timeout,and another is event being triggered.
+
+            if(t_cond->cancelled) {     //this is timeout operation.
+                errno = t_cond->cancelled;
+                return -1;
+            }
+
+            if(timer)
+                timer->cancel();
+
+            continue;                   //successly. turn back "do" to run the function again.
         }
-    }
-    return n;
+    } while(false);
+
+    return result;
 }
 
 extern "C" {
@@ -180,9 +180,8 @@ int usleep(useconds_t usec) {
 }
 
 int nanosleep(const struct timespec *req, struct timespec *rem) {
-    if(!qff::t_hook_enable) {
+    if(!qff::t_hook_enable)
         return nanosleep_f(req, rem);
-    }
 
     int timeout_ms = req->tv_sec * 1000 + req->tv_nsec / 1000 /1000;
     qff::Fiber::ptr fiber = qff::Fiber::GetThis();
@@ -198,88 +197,78 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
 }
 
 int socket(int domain, int type, int protocol) {
-    if(!qff::t_hook_enable) {
+    if(!qff::t_hook_enable)
         return socket_f(domain, type, protocol);
-    }
 
     int fd = socket_f(domain, type, protocol);
-    if(fd == -1) {
-        return fd;
-    }
+    if(fd == -1)
+        return -1;
 
-    qff::FdMgr::Get()->add_and_get_fdctx(fd, true);
+    qff::FdMgr::Get()->add_or_get_fdctx(fd, true);
     return fd;
 }
 
 int connect_with_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen, int timeout_ms) {
-    if(!qff::t_hook_enable) {
+    if(!qff::t_hook_enable)
         return connect_f(fd, addr, addrlen);
-    }
-    qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_and_get_fdctx(fd);
-    if(!ctx || ctx->is_closed) {
+
+    qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_or_get_fdctx(fd);
+    if(!ctx || !ctx->is_init) {
         errno = EBADF;
         return -1;
     }
 
-    if(!ctx->is_socket) {
+    if(!ctx->is_socket || ctx->sys_non_block)
         return connect_f(fd, addr, addrlen);
-    }
 
-    if(ctx->user_non_block) {
-        return connect_f(fd, addr, addrlen);
-    }
-
-    int n = connect_f(fd, addr, addrlen);
-    if(n == 0) {
+    int rt = connect_f(fd, addr, addrlen);
+    if(rt == 0)
         return 0;
-    } else if(n != -1 || errno != EINPROGRESS) {
-        return n;
-    }
+
+    if(errno != EINPROGRESS)
+        return -1;
 
     qff::IOManager* iom = qff::IOManager::GetThis();
     qff::Timer::ptr timer;
-    std::shared_ptr<timer_info> tinfo = std::make_shared<timer_info>();
-    std::weak_ptr<timer_info> winfo(tinfo);
+    std::shared_ptr<timer_cond> t_cond = std::make_shared<timer_cond>();
 
     if(timeout_ms != -1) {
-        timer = iom->add_cond_timer(timeout_ms, [winfo, fd, iom]() {
-                auto t = winfo.lock();
-                if(!t || t->cancelled) {
-                    return;
-                }
-                t->cancelled = ETIMEDOUT;
-                iom->cancel_event(fd, qff::IOManager::WRITE);
-        }, winfo);
+        timer = iom->add_cond_timer(timeout_ms, [&t_cond, fd, iom]() {
+            if(t_cond->cancelled)
+                return;
+            t_cond->cancelled = ETIMEDOUT;
+            iom->cancel_event(fd, qff::IOManager::WRITE);
+        }, t_cond);
     }
 
-    int rt = iom->add_event(fd, qff::IOManager::WRITE);
-    if(rt == 0) {
-        qff::Fiber::YieldToHold();
-        if(timer) {
+    rt = iom->add_event(fd, qff::IOManager::WRITE);
+    if(UNLIKELY(rt)) {
+        if(timer)
             timer->cancel();
-        }
-        if(tinfo->cancelled) {
-            errno = tinfo->cancelled;
-            return -1;
-        }
-    } else {
-        if(timer) {
-            timer->cancel();
-        }
         QFF_LOG_ERROR(QFF_LOG_SYSTEM) << "connect addEvent(" << fd << ", WRITE) error";
     }
 
+    qff::Fiber::YieldToHold();
+
+    if(t_cond->cancelled) {
+        errno = t_cond->cancelled;
+        return -1;
+    }
+
+    if(timer)
+        timer->cancel();
+
     int error = 0;
     socklen_t len = sizeof(int);
-    if(-1 == getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len)) {
+    if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len))
         return -1;
-    }
-    if(!error) {
-        return 0;
-    } else {
+
+    if(error) {
         errno = error;
         return -1;
-    }
+    } 
+
+    return 0;
 }
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
@@ -288,9 +277,10 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 int accept(int s, struct sockaddr *addr, socklen_t *addrlen) {
     int fd = do_io(s, accept_f, "accept", qff::IOManager::READ, SO_RCVTIMEO, addr, addrlen);
-    if(fd >= 0) {
-        qff::FdMgr::Get()->add_and_get_fdctx(fd, true);
-    }
+    if(fd < 0)
+        return -1;
+
+    qff::FdMgr::Get()->add_or_get_fdctx(fd, true);
     return fd;
 }
 
@@ -335,16 +325,15 @@ ssize_t sendmsg(int s, const struct msghdr *msg, int flags) {
 }
 
 int close(int fd) {
-    if(!qff::t_hook_enable) {
+    if(!qff::t_hook_enable)
         return close_f(fd);
-    }
 
-    qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_and_get_fdctx(fd);
+    qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_or_get_fdctx(fd);
     if(ctx) {
         auto iom = qff::IOManager::GetThis();
-        if(iom) {
+        if(iom)
             iom->cancel_all(fd);
-        }
+
         qff::FdMgr::Get()->del_fdctx(fd);
     }
     return close_f(fd);
@@ -358,34 +347,13 @@ int fcntl(int fd, int cmd, ... /* arg */ ) {
             {
                 int arg = va_arg(va, int);
                 va_end(va);
-                qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_and_get_fdctx(fd);
-                if(!ctx || ctx->is_closed || !ctx->is_socket) {
+                qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_or_get_fdctx(fd);
+                if(!ctx || !ctx->is_socket)
                     return fcntl_f(fd, cmd, arg);
-                }
-                ctx->user_non_block = arg & O_NONBLOCK;
-                if(ctx->sys_non_block) {
-                    arg |= O_NONBLOCK;
-                } else {
-                    arg &= ~O_NONBLOCK;
-                }
+
+                ctx->sys_non_block = arg & O_NONBLOCK;
                 return fcntl_f(fd, cmd, arg);
             }
-            break;
-        case F_GETFL:
-            {
-                va_end(va);
-                int arg = fcntl_f(fd, cmd);
-                qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_and_get_fdctx(fd);
-                if(!ctx || ctx->is_closed || !ctx->is_socket) {
-                    return arg;
-                }
-                if(ctx->user_non_block) {
-                    return arg | O_NONBLOCK;
-                } else {
-                    return arg & ~O_NONBLOCK;
-                }
-            }
-            break;
         case F_DUPFD:
         case F_DUPFD_CLOEXEC:
         case F_SETFD:
@@ -401,7 +369,7 @@ int fcntl(int fd, int cmd, ... /* arg */ ) {
                 va_end(va);
                 return fcntl_f(fd, cmd, arg); 
             }
-            break;
+        case F_GETFL:
         case F_GETFD:
         case F_GETOWN:
         case F_GETSIG:
@@ -413,7 +381,6 @@ int fcntl(int fd, int cmd, ... /* arg */ ) {
                 va_end(va);
                 return fcntl_f(fd, cmd);
             }
-            break;
         case F_SETLK:
         case F_SETLKW:
         case F_GETLK:
@@ -422,7 +389,6 @@ int fcntl(int fd, int cmd, ... /* arg */ ) {
                 va_end(va);
                 return fcntl_f(fd, cmd, arg);
             }
-            break;
         case F_GETOWN_EX:
         case F_SETOWN_EX:
             {
@@ -430,7 +396,6 @@ int fcntl(int fd, int cmd, ... /* arg */ ) {
                 va_end(va);
                 return fcntl_f(fd, cmd, arg);
             }
-            break;
         default:
             va_end(va);
             return fcntl_f(fd, cmd);
@@ -444,13 +409,14 @@ int ioctl(int d, unsigned long int request, ...) {
     va_end(va);
 
     if(FIONBIO == request) {
-        bool user_nonblock = !!*(int*)arg;
-        qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_and_get_fdctx(d);
-        if(!ctx || ctx->is_closed || !ctx->is_socket) {
-            return ioctl_f(d, request, arg);
-        }
-        ctx->user_non_block = user_nonblock;
+        return ioctl_f(d, request, arg);
     }
+
+    bool nonblock = *(int*)arg;
+    qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_or_get_fdctx(d);
+    if(ctx && ctx->is_socket)
+        ctx->sys_non_block = nonblock;
+
     return ioctl_f(d, request, arg);
 }
 
@@ -459,12 +425,12 @@ int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optl
 }
 
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
-    if(!qff::t_hook_enable) {
+    if(!qff::t_hook_enable)
         return setsockopt_f(sockfd, level, optname, optval, optlen);
-    }
+
     if(level == SOL_SOCKET) {
         if(optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) {
-            qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_and_get_fdctx(sockfd);
+            qff::FdContext::ptr ctx = qff::FdMgr::Get()->add_or_get_fdctx(sockfd);
             if(ctx) {
                 const timeval* v = (const timeval*)optval;
                 if(optname == SO_RCVTIMEO)

@@ -348,7 +348,7 @@ bool IOManager::stopping() noexcept {
 void IOManager::idle() {
     static const size_t MAX_EVENT_COUNT = 64;
     epoll_event* ep_events = new epoll_event[MAX_EVENT_COUNT];
-    QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << "IOManager::idle()";
+    QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << "IOManager::idle() start";
     int rt = 0;
     int next_timeout;
     std::vector<Timer::CallBackType> cbs;

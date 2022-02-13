@@ -298,9 +298,9 @@ void Logger::log(LogEvent::ptr p_event) {
 
 LoggerManager::LoggerManager() {
 	m_root = std::make_shared<Logger>("ROOT", qff::LogLevel::DEBUG
-								, "[%d] [%T] [%i] [%f] %F:%L   %n%m");
+								, "[%d] [%T] [%i] [%f]  [%p] %F:%L   %n%m");
 	m_system = std::make_shared<Logger>("SYSTEM", qff::LogLevel::DEBUG
-								, "[%d] [%T] [%i] [%f] %F:%L   %n%m");	
+								, "[%d] [%T] [%i] [%f]  [%p] %F:%L   %n%m");	
 	m_loggers.push_back(m_root);
 	m_loggers.push_back(m_system);
 }
