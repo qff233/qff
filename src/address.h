@@ -35,7 +35,7 @@ public:
     void set_addr_len(uint32_t v);
     
     std::string to_string();
-    virtual std::ostream& out_put(std::ostream& os) const;
+    virtual std::ostream& out_put(std::ostream& os) const = 0;
 
     bool operator<(const Address& rhs) const;
     bool operator==(const Address& rhs) const;
@@ -79,6 +79,7 @@ class IPv4Address final : public IPAddress {
 public:
     typedef std::shared_ptr<IPv4Address> ptr;
 
+    IPv4Address(const sockaddr_in& address);
     IPv4Address(uint32_t address = INADDR_ANY, uint32_t port = 0);
     const sockaddr* get_addr() const override;
     std::ostream& out_put(std::ostream& os) const override;
@@ -95,6 +96,7 @@ class IPv6Address final : public IPAddress {
 public:
     typedef std::shared_ptr<IPv6Address> ptr;
 
+    IPv6Address(const sockaddr_in6& address);
     IPv6Address(uint32_t address = INADDR_ANY, uint32_t port = 0);
     const sockaddr* get_addr() const override;
     std::ostream& out_put(std::ostream& os) const override;
