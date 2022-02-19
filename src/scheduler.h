@@ -36,8 +36,6 @@ public:
     typedef std::shared_ptr<Scheduler> ptr;
     typedef Mutex MutexType;
     typedef std::function<void()> CallBackType;
-    typedef std::list<FiberAndThread> FListType;
-    typedef std::vector<Thread::ptr> TPoolType;
     
     static Scheduler* GetThis();
 
@@ -58,16 +56,17 @@ private:
     void idle_base();
 protected:
     virtual void init();
-    virtual void tickle() noexcept;
-    virtual bool stopping() noexcept;
+    virtual void tickle();
+    virtual bool stopping();
     virtual void idle();
     void run();
 
     bool has_idle_threads() noexcept;
 private:
     MutexType m_mutex;
-    FListType m_fiber_list;
-    TPoolType m_thread_pool;
+    std::list<FiberAndThread> m_fiber_list;
+    //record the fiber that will be run.
+    std::vector<Thread::ptr> m_thread_pool;
     Fiber::ptr m_root_fiber;
     Fiber::ptr m_cache_fiber;
     std::string m_name;

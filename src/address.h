@@ -18,7 +18,7 @@ public:
 
     static Address::ptr Create(const sockaddr* addr, socklen_t addr_len);
     static std::vector<Address::ptr> Lookup(std::string_view host, int family = AF_INET, int type = 0, int protocol = 0);
-    static Address::ptr LookupAny(const std::string& host, int family = AF_INET, int type = 0, int protocol = 0);
+    static Address::ptr LookupAny(std::string_view host, int family = AF_INET, int type = 0, int protocol = 0);
 
     static std::vector<std::tuple<std::string, Address::ptr, uint32_t>>
         GetInterfaceAddresses(int family = AF_INET);
@@ -35,7 +35,7 @@ public:
     void set_addr_len(uint32_t v);
     
     std::string to_string();
-    virtual std::ostream& out_put(std::ostream& os) const = 0;
+    virtual std::ostream& dump(std::ostream& os) const = 0;
 
     bool operator<(const Address& rhs) const;
     bool operator==(const Address& rhs) const;
@@ -55,7 +55,7 @@ public:
     const sockaddr* get_addr() const override;
     std::string get_path() const;
 
-    std::ostream& out_put(std::ostream& os) const override;
+    std::ostream& dump(std::ostream& os) const override;
 private:
     sockaddr_un m_addr;
 };
@@ -65,7 +65,7 @@ public:
     typedef std::shared_ptr<IPAddress> ptr;
 
     static IPAddress::ptr Create(std::string_view address, uint16_t port = 0);
-    static std::shared_ptr<IPAddress> LookupAny(const std::string& host, int family = AF_INET, int type = 0, int protocol = 0);
+    static std::shared_ptr<IPAddress> LookupAny(std::string_view host, int family = AF_INET, int type = 0, int protocol = 0);
 
     virtual IPAddress::ptr broad_cast_address(uint32_t prefix_len) = 0;
     virtual IPAddress::ptr network_address(uint32_t prefix_len) = 0;
@@ -79,10 +79,10 @@ class IPv4Address final : public IPAddress {
 public:
     typedef std::shared_ptr<IPv4Address> ptr;
 
-    IPv4Address(const sockaddr_in& address);
+    IPv4Address(const sockaddr_in& address) noexcept;
     IPv4Address(uint32_t address = INADDR_ANY, uint32_t port = 0);
     const sockaddr* get_addr() const override;
-    std::ostream& out_put(std::ostream& os) const override;
+    std::ostream& dump(std::ostream& os) const override;
     IPAddress::ptr broad_cast_address(uint32_t prefix_len) override;
     IPAddress::ptr network_address(uint32_t prefix_len) override;
     IPAddress::ptr subnet_address(uint32_t prefix_len) override;
@@ -96,10 +96,10 @@ class IPv6Address final : public IPAddress {
 public:
     typedef std::shared_ptr<IPv6Address> ptr;
 
-    IPv6Address(const sockaddr_in6& address);
-    IPv6Address(uint32_t address = INADDR_ANY, uint32_t port = 0);
+    IPv6Address(const sockaddr_in6& address) noexcept;
+    IPv6Address(const uint8_t address[16] = 0, uint16_t port = 0);
     const sockaddr* get_addr() const override;
-    std::ostream& out_put(std::ostream& os) const override;
+    std::ostream& dump(std::ostream& os) const override;
     IPAddress::ptr broad_cast_address(uint32_t prefix_len) override;
     IPAddress::ptr network_address(uint32_t prefix_len) override;
     IPAddress::ptr subnet_address(uint32_t prefix_len) override;
@@ -116,7 +116,7 @@ public:
     UnknownAddress(int family);
     UnknownAddress(const sockaddr& addr);
     const sockaddr* get_addr() const override;
-    std::ostream& out_put(std::ostream& os) const override;
+    std::ostream& dump(std::ostream& os) const override;
 private:
     sockaddr m_addr;
 };

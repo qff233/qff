@@ -1,28 +1,28 @@
 #ifndef __QFF_SINGLETON_H__
 #define __QFF_SINGLETON_H__
 
+#include <memory>
 
 namespace qff {
 
 template<typename T>
 class Singleton final {
 public:
-    static T* Get() { return *GetPPtr(); }
+    static T* Get() { return GetPPtr()->get(); }
 
     template<typename... Args>
     static void New(Args&&... args) {
         if(Get() != nullptr) std::abort();
-        *GetPPtr() = new T(std::forward<Args>(args)...);
+        *GetPPtr() = std::make_shared<T>(std::forward<Args>(args)...);
     }
 
     static void Delete() {
         if (Get() == nullptr) return;
-        delete Get();
-        *GetPPtr() = nullptr;
+        GetPPtr()->reset();
     }
 private:
-    static T** GetPPtr() {
-        static T* ptr = nullptr;
+    static std::shared_ptr<T>* GetPPtr() {
+        static std::shared_ptr<T> ptr = nullptr;
         return &ptr;
     }
 };

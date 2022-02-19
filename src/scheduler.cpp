@@ -51,7 +51,7 @@ Scheduler::Scheduler(size_t thread_count, const std::string& name, bool use_call
     :m_name(name) {
     
     if(use_caller) {
-        Fiber::Init();
+        Fiber::Init(10, 1024*1024);
         --thread_count;
 
         assert(t_scheduler == nullptr);
@@ -160,11 +160,11 @@ void Scheduler::init() {
     QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::init()";
 }
 
-void Scheduler::tickle() noexcept {
+void Scheduler::tickle() {
     QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::tickle()";
 }
 
-bool Scheduler::stopping() noexcept {
+bool Scheduler::stopping() {
     QFF_LOG_INFO(QFF_LOG_SYSTEM) << "scheduler::stopping()";
     return true;
 }
@@ -178,7 +178,7 @@ void Scheduler::idle() {
 
 void Scheduler::run() {
     t_scheduler = this;
-    Fiber::Init();
+    Fiber::Init(10, 1024*1024);
     this->init();
     auto func = std::bind(&Scheduler::idle, this);
     Fiber::ptr idle_fiber = std::make_shared<Fiber>(func);

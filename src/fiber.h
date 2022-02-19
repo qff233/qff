@@ -5,12 +5,15 @@
 #include <ucontext.h>
 #include <memory>
 #include <functional>
+#include <atomic>
 
-#include "macro.h"
+#include "thread.h"
+
 
 namespace qff {
 
 typedef ulong fid_t;    
+
 
 class Scheduler;
 class Fiber : public std::enable_shared_from_this<Fiber>{
@@ -31,8 +34,7 @@ public:
 
     static fid_t GetFiberId() noexcept;
     static Fiber::ptr GetThis() noexcept;
-    static Fiber::ptr GetCacheFiber() noexcept;
-    static void Init() noexcept;
+    static void Init(size_t amount, size_t stack_base_size);
     static void YieldToReady() noexcept;
     static void YieldToHold() noexcept;
 
@@ -53,6 +55,7 @@ public:
     void back() noexcept;
 private:
     Fiber() noexcept;
+    static Fiber::ptr GetCacheFiber() noexcept;
 
     static void MainFunc() noexcept;
     static void CallerMainFunc() noexcept;
@@ -65,6 +68,8 @@ private:
 
     ucontext_t m_uct;
     CallBackType m_cb;
+
+    size_t m_alloc_pos;
 };
 
 } // namespace qff

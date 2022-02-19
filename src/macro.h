@@ -19,6 +19,7 @@
 #define QFF_BYTE_ORDER QFF_LITTLE_ENDIAN
 #endif
 
+
 #if QFF_BYTE_ORDER == QFF_BIG_ENDIAN
 template<class T>
 T byteswapOnLittleEndian(T t) {

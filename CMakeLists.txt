@@ -25,8 +25,8 @@ target_link_libraries(qff yaml-cpp pthread dl)
 # add_executable(test_thread test/test_thread)
 # target_link_libraries(test_thread qff233)
 
-#add_executable(test_fiber test/test_fiber)
-#target_link_libraries(test_fiber qff)
+add_executable(test_fiber test/test_fiber)
+target_link_libraries(test_fiber qff)
 
 add_executable(test_iomanager test/test_iomanager)
 target_link_libraries(test_iomanager qff)
