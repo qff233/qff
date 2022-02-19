@@ -16,8 +16,8 @@ struct FdContext final {
 
     int fd;
 
-    int recv_timeout;
-    int send_timeout;
+    uint64_t recv_timeout;
+    uint64_t send_timeout;
 
     FdContext(int fd) noexcept;
 };

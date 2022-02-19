@@ -25,7 +25,6 @@ int main() {
     for(auto i : threads) {
         i->join();
     }
-
     LoggerMgr::Delete();
     return 0;
 }

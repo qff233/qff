@@ -99,7 +99,7 @@ static ssize_t do_io(int fd, OriginFun fun, std::string_view hook_fun_name,
     std::shared_ptr<timer_cond> t_cond = std::make_shared<timer_cond>();
     ssize_t result = -1;
 
-    do {
+ while(true) {
         result = fun(fd, std::forward<Args>(args)...);
         while(result == -1 && errno == EINTR) {
             result = fun(fd, std::forward<Args>(args)...);
@@ -107,7 +107,7 @@ static ssize_t do_io(int fd, OriginFun fun, std::string_view hook_fun_name,
         if(result == -1 && errno == EAGAIN) {
             qff::IOManager* iom = qff::IOManager::GetThis();
             qff::Timer::ptr timer;
-
+            //QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << hook_fun_name << " is hooked and addEvent()";
             if(timeout != -1)
                 timer = iom->add_cond_timer(timeout, [&t_cond, fd, iom, event]{
                     t_cond->cancelled = ETIMEDOUT;
@@ -131,11 +131,11 @@ static ssize_t do_io(int fd, OriginFun fun, std::string_view hook_fun_name,
 
             if(timer)
                 timer->cancel();
-
-            continue;                   //successly. turn back "do" to run the function again.
+                //successly. turn back "do" to run the function again.
+            continue;
         }
-    } while(false);
-
+        break;
+    }
     return result;
 }
 
@@ -162,7 +162,7 @@ unsigned int sleep(unsigned int seconds) {
     qff::Fiber::YieldToHold();
     return 0;
 }
-            
+
 int usleep(useconds_t usec) {
     if(!qff::t_hook_enable)
         return usleep_f(usec);
@@ -218,20 +218,20 @@ int connect_with_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen,
         return -1;
     }
 
-    if(!ctx->is_socket || ctx->sys_non_block)
+    if(!ctx->is_socket || !ctx->sys_non_block) {
         return connect_f(fd, addr, addrlen);
+    }
 
     int rt = connect_f(fd, addr, addrlen);
     if(rt == 0)
         return 0;
-
     if(errno != EINPROGRESS)
-        return -1;
+        return rt;
 
     qff::IOManager* iom = qff::IOManager::GetThis();
     qff::Timer::ptr timer;
     std::shared_ptr<timer_cond> t_cond = std::make_shared<timer_cond>();
-
+    
     if(timeout_ms != -1) {
         timer = iom->add_cond_timer(timeout_ms, [&t_cond, fd, iom]() {
             if(t_cond->cancelled)
@@ -249,7 +249,6 @@ int connect_with_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen,
     }
 
     qff::Fiber::YieldToHold();
-
     if(t_cond->cancelled) {
         errno = t_cond->cancelled;
         return -1;
@@ -260,9 +259,8 @@ int connect_with_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen,
 
     int error = 0;
     socklen_t len = sizeof(int);
-    if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len))
+    if(::getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len))
         return -1;
-
     if(error) {
         errno = error;
         return -1;
@@ -407,7 +405,9 @@ int ioctl(int d, unsigned long int request, ...) {
     va_start(va, request);
     void* arg = va_arg(va, void*);
     va_end(va);
-
+    if(!qff::t_hook_enable)
+        return ioctl_f(d, request, arg);
+        
     if(FIONBIO == request) {
         return ioctl_f(d, request, arg);
     }

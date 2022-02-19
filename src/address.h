@@ -80,7 +80,7 @@ public:
     typedef std::shared_ptr<IPv4Address> ptr;
 
     IPv4Address(const sockaddr_in& address) noexcept;
-    IPv4Address(uint32_t address = INADDR_ANY, uint32_t port = 0);
+    IPv4Address(uint32_t address = INADDR_ANY, uint16_t port = 0);
     const sockaddr* get_addr() const override;
     std::ostream& dump(std::ostream& os) const override;
     IPAddress::ptr broad_cast_address(uint32_t prefix_len) override;

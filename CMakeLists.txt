@@ -12,7 +12,9 @@ find_package(yaml-cpp REQUIRED)
 
 include_directories(${yaml-cpp_INCLUDE_DIRS})
 
-aux_source_directory(./src src_list)
+file(GLOB_RECURSE src_list ./src/*.cpp)
+#aux_source_directory(./src src_list)
+
 add_library(qff SHARED ${src_list})
 target_link_libraries(qff yaml-cpp pthread dl)
 
@@ -25,12 +27,15 @@ target_link_libraries(qff yaml-cpp pthread dl)
 # add_executable(test_thread test/test_thread)
 # target_link_libraries(test_thread qff233)
 
-add_executable(test_fiber test/test_fiber)
-target_link_libraries(test_fiber qff)
+#add_executable(test_fiber test/test_fiber)
+#target_link_libraries(test_fiber qff)
 
 add_executable(test_iomanager test/test_iomanager)
 target_link_libraries(test_iomanager qff)
 
+add_executable(test_socket test/test_socket)
+target_link_libraries(test_socket qff)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+

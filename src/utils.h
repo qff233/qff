@@ -21,6 +21,13 @@ namespace StringUtils {
     std::string StringToUpper(std::string_view str) noexcept;
     std::string StringToLower(std::string_view str) noexcept;
 
+    std::string UrlEncode(std::string_view str, bool space_as_plus = true);
+    std::string UrlDecode(std::string_view str, bool space_as_plus = true);
+
+    std::string Trim(std::string_view str, std::string_view delimit = " \t\r\n");
+    std::string TrimLeft(std::string_view str, std::string_view delimit = " \t\r\n");
+    std::string TrimRight(std::string_view str, std::string_view delimit = " \t\r\n");
+
     std::vector<std::string> Spilt(std::string_view str, char sign);
 
     std::string Format(const char* fmt, ...);

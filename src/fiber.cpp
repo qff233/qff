@@ -11,115 +11,6 @@
 
 namespace qff {
 
-class Allocater {
-public:
-    typedef std::shared_ptr<Allocater> ptr;
-    typedef RWMutex RWMutexType;
-
-    struct Node {
-        void* ptr = nullptr;
-        std::atomic<bool> is_used = {false};
-        std::atomic<bool> is_create_base = {false};
-        Node(){
-        }
-        Node(void* ptr, bool is_used, bool is_create_base)
-            :ptr(ptr)
-            ,is_used(is_used)
-            ,is_create_base(is_create_base) {
-        }
-        Node(const Node& other) {
-            ptr = other.ptr;
-            is_used.store(other.is_used);
-            is_create_base.store(other.is_create_base);
-        }
-    };
-
-    Allocater(size_t amount, size_t stack_size) 
-        :m_stack_size(stack_size) {
-
-        this->resize(amount);
-    }
-
-    ~Allocater() noexcept {
-        for(auto it = m_memorys.begin(); it != m_memorys.end(); ++it) {
-            if(it->is_create_base)
-                ::free(it->ptr);
-        }
-    }
-
-    //         ptr    pos
-    std::pair<void*, size_t> malloc() {
-        if(m_now_pos >= m_memorys.size() || m_memorys[m_now_pos].is_used) {
-            static constexpr size_t nope = static_cast<size_t>(-1);
-            static std::atomic<size_t> search_count = {0};
-            bool has_resized = false;
-            size_t old_pos = m_memorys.size();
-            
-            if(search_count == 3) {
-                this->resize(m_memorys.size() * 1.5);
-                search_count = 0;
-                has_resized = true;
-            }
-
-            size_t pos = nope;
-            if(!has_resized) {
-                ++search_count;
-                for(size_t i = 0; i < m_memorys.size(); ++i) {
-                    if(!m_memorys[i].is_used) {
-                        pos = i;
-                        QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << "for() break" << "     pos=" << pos;
-                        break;
-                    }
-                }
-            }
-
-            if(pos == nope) {
-                m_now_pos = old_pos;
-                if(!has_resized) {
-                    this->resize(m_memorys.size() * 1.5);
-                    search_count = 0;
-                }
-            } else {
-                m_now_pos = pos;
-            }
-        }
-        
-        size_t result_pos = m_now_pos++;
-        m_memorys[result_pos].is_used = true;
-        QFF_LOG_DEBUG(QFF_LOG_SYSTEM) << m_memorys[result_pos].ptr << "-----" << result_pos;
-        return {m_memorys[result_pos].ptr, result_pos};
-    }
-
-    void free(size_t pos) noexcept {
-        RWMutexType::WriteLock lock(m_mutex);
-        if(pos >= m_memorys.size())
-            return;
-        m_memorys[pos].is_used = false;
-    }
-
-    void resize(size_t amount) {
-        RWMutexType::WriteLock lock(m_mutex);
-        size_t old_size = m_memorys.size();
-        m_memorys.resize(amount);
-        m_memorys[old_size].is_create_base = true;
-
-        void *ps = ::malloc((amount - old_size) * m_stack_size);
-        size_t p_pos = 0;
-        for(; old_size < amount; ++old_size) {
-            void* p = ((char*)ps + p_pos);
-            m_memorys[old_size].ptr = p;
-            p_pos += m_stack_size;
-        }
-    }
-private:
-    size_t m_stack_size;
-    std::atomic<size_t> m_now_pos = 0;
-    std::vector<Node> m_memorys;
-    RWMutexType m_mutex;
-};
-
-static Allocater::ptr s_allocater = nullptr;
-
 static std::atomic<fid_t> s_fiber_id {0};
 static std::atomic<size_t> s_fiber_count {0};
 
@@ -141,8 +32,7 @@ Fiber::ptr Fiber::GetThis() noexcept {
     return t_fiber->shared_from_this();
 }
  
-void Fiber::Init(size_t amount, size_t stack_base_size) {
-    s_allocater = std::make_shared<Allocater>(amount, stack_base_size);
+void Fiber::Init() {
     if(t_thread_fiber)
         return;
     t_thread_fiber.reset(new Fiber);
@@ -183,9 +73,7 @@ Fiber::Fiber(CallBackType cb, size_t stacksize, bool use_caller) noexcept
     ,m_stack_size(stacksize)
     ,m_cb(cb) {
         
-    auto[stack, alloc_pos] = s_allocater->malloc();
-    m_stack = stack;
-    m_alloc_pos = alloc_pos;
+    m_stack = ::malloc(stacksize);
 
     int rt = ::getcontext(&m_uct);
     if(UNLIKELY(rt)) {
@@ -209,7 +97,7 @@ Fiber::Fiber(CallBackType cb, size_t stacksize, bool use_caller) noexcept
 Fiber::~Fiber() noexcept {
     --s_fiber_count;
     if(LIKELY(m_stack)) {
-        s_allocater->free(m_alloc_pos);
+        ::free(m_stack);
         if(UNLIKELY(m_state == EXEC 
                 || m_state == HOLD 
                 || m_state == READY)) {
@@ -276,8 +164,9 @@ void Fiber::call() noexcept {
     m_state = EXEC;
 
     int rt = ::swapcontext(&Scheduler::GetCacheFiber()->m_uct, &m_uct);
+
     if(rt) {
-        QFF_LOG_FATAL(QFF_LOG_SYSTEM) << "swapcontext() fatal. swapIn()";
+        QFF_LOG_FATAL(QFF_LOG_SYSTEM) << "swapcontext() fatal. call()";
         std::terminate();
     }
 }

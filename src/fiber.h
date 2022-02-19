@@ -34,7 +34,7 @@ public:
 
     static fid_t GetFiberId() noexcept;
     static Fiber::ptr GetThis() noexcept;
-    static void Init(size_t amount, size_t stack_base_size);
+    static void Init();
     static void YieldToReady() noexcept;
     static void YieldToHold() noexcept;
 
@@ -68,8 +68,6 @@ private:
 
     ucontext_t m_uct;
     CallBackType m_cb;
-
-    size_t m_alloc_pos;
 };
 
 } // namespace qff
