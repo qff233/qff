@@ -1,23 +1,12 @@
 
 cmake_minimum_required(VERSION 3.16)
-project(qff)
 
 set(CMAKE_VERBOSE_MAKEFILE  ON)
 
-include_directories(./src)
+add_subdirectory(qff)
+include_directories(qff)
 
 add_compile_options(-std=c++17  -ggdb -Wall -Werror -Wno-unused-function -Wno-builtin-macro-redefined -Wno-deprecated-declarations)
-
-find_package(yaml-cpp REQUIRED)
-
-include_directories(${yaml-cpp_INCLUDE_DIRS})
-
-file(GLOB_RECURSE src_list ./src/*.cpp)
-#aux_source_directory(./src src_list)
-
-add_library(qff SHARED ${src_list})
-target_link_libraries(qff yaml-cpp pthread dl)
-
 # add_executable(test_log test/test_log)
 # target_link_libraries(test_log qff233)
 
@@ -35,6 +24,9 @@ target_link_libraries(test_iomanager qff)
 
 add_executable(test_socket test/test_socket)
 target_link_libraries(test_socket qff)
+
+add_executable(test_http test/test_http)
+target_link_libraries(test_http qff)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

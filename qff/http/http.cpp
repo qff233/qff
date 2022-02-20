@@ -5,9 +5,9 @@
 namespace qff::http {
     
 HttpMethod StringToHttpMethod(std::string_view str) {
-#define XX(num, name, string)                   \
-    if(::strcmp(#string, str.data()) == 0) {    \
-        return HttpMethod::name;                \
+#define XX(num, name, string)                                   \
+    if(::strncmp(#string, str.data(), strlen(#string)) == 0) {    \
+        return HttpMethod::name;                                \
     }
     HTTP_METHOD_MAP(XX);
 #undef XX
@@ -159,7 +159,7 @@ std::ostream& HttpRequest::dump(std::ostream& os) const {
     return os;
 }
 
-std::string HttpRequest::toString() const {
+std::string HttpRequest::to_string() const {
     std::stringstream ss;
     dump(ss);
     return ss.str();
@@ -312,6 +312,14 @@ void HttpResponse::set_cookie(std::string_view key, std::string_view val,
         ss << ";secure";
     }
     m_cookies.push_back(ss.str());
+}
+
+std::ostream& operator<<(std::ostream& os, const HttpRequest& req) {
+    return req.dump(os);
+}
+
+std::ostream& operator<<(std::ostream& os, const HttpResponse& rsp) {
+    return rsp.dump(os);
 }
 
 } // namespace qff

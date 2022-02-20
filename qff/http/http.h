@@ -138,7 +138,7 @@ struct CaseInsensitiveLess {
 
 template<typename MapType, typename T>
 bool CheckGetAs(const MapType& m, std::string_view key, T& val, const T& def) {
-    auto it = m.find(key);
+    auto it = m.find(key.data());
     if(it == m.end()) {
         val = def;
         return false;
@@ -154,7 +154,7 @@ bool CheckGetAs(const MapType& m, std::string_view key, T& val, const T& def) {
 
 template<typename MapType, typename T>
 T GetAs(const MapType& m, std::string_view key, const T& def) {
-    auto it = m.find(key);
+    auto it = m.find(key.data());
     if(it == m.end()) {
         return def;
     }
@@ -229,7 +229,7 @@ public:
     }
 
     std::ostream& dump(std::ostream& os) const;
-    std::string toString() const;
+    std::string to_string() const;
 
     void init();
     void init_param();
